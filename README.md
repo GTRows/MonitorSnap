@@ -15,13 +15,27 @@ This tool lets you save display presets (positions, resolutions, refresh rates, 
 ## Features
 
 - Save unlimited display presets
-- Visual preview of monitor layout
+- Visual preview of monitor layout with primary monitor indicator (★)
 - Restore with one click from tray menu
 - Global hotkeys for instant preset switching
 - Rename/delete presets
 - Dark/Light/System theme
 - Auto-start with Windows
 - Fully portable (all data in %APPDATA%)
+
+## What Gets Saved
+
+Each preset captures your complete display configuration:
+
+- **Monitor Positions** - Exact X,Y coordinates for each display
+- **Resolutions** - Width and height for each monitor
+- **Refresh Rates** - 60Hz, 144Hz, 165Hz, etc.
+- **Orientation** - Landscape, portrait, or flipped
+- **Primary Monitor** - Which monitor has the taskbar and Start menu
+- **Scaling** - Display scaling settings
+- **Display Topology** - Extended desktop, duplicate, or single display mode
+
+> All settings are retrieved directly from Windows Display Configuration API for pixel-perfect accuracy.
 
 ## Installation
 

@@ -74,6 +74,10 @@ class MonitorPreviewWidget(QFrame):
             target_info = path.get('targetInfo', {})
             target_id = target_info.get('id', 0)
 
+            # Check if this is the primary monitor
+            # DISPLAYCONFIG_PATH_ACTIVE (0x1) flag indicates primary/active path
+            is_primary = bool(path.get('flags', 0) & 0x1)
+
             monitors.append({
                 'x': pos.get('x', 0),
                 'y': pos.get('y', 0),
@@ -81,7 +85,8 @@ class MonitorPreviewWidget(QFrame):
                 'height': height,
                 'active': True,
                 'id': target_id,
-                'source_id': path.get('sourceInfo', {}).get('id', 0)
+                'source_id': path.get('sourceInfo', {}).get('id', 0),
+                'is_primary': is_primary
             })
 
         if not monitors:
@@ -159,6 +164,10 @@ class MonitorPreviewWidget(QFrame):
                 id_text = f"Monitor {', '.join(map(str, display_nums))}"
             else:
                 id_text = f"Monitor {monitor['display_number']}"
+
+            # Add primary indicator
+            if monitor.get('is_primary', False):
+                id_text = f"★ {id_text}"
 
             painter.drawText(int(x), int(y + h * 0.2), int(w), int(h * 0.3),
                            Qt.AlignmentFlag.AlignCenter, id_text)
