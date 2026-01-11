@@ -1,10 +1,16 @@
-# Display Presets
+# MonitorSnap
 
-A simple tray app to save and restore Windows display configurations. Useful when you frequently switch between different monitor setups.
+A modern Windows 11 tray app for instantly switching between different display configurations. Perfect for KVM switch users, multi-monitor setups, and anyone who frequently changes their display arrangement.
 
 ## Why?
 
-Windows forgets your monitor positions when you disconnect/reconnect displays. This tool saves your exact configuration (positions, resolutions, refresh rates, orientation) and lets you restore it with one click.
+**Do you switch between different monitor setups?**
+- Using a KVM switch to share monitors between multiple PCs
+- Gaming on a single high-refresh monitor vs. working on multiple displays
+- Docking/undocking your laptop throughout the day
+- Presenting with a projector vs. your regular setup
+
+This tool lets you save display presets (positions, resolutions, refresh rates, orientation) and switch between them instantly with global hotkeys or one click from the tray menu.
 
 ## Features
 
@@ -19,12 +25,24 @@ Windows forgets your monitor positions when you disconnect/reconnect displays. T
 
 ## Installation
 
-### Quick start (Python)
+### Option 1: Setup Installer (Recommended)
+
+1. Download `MonitorSnapSetup-x.x.x.exe` from [Releases](https://github.com/GTRows/MonitorSnap/releases)
+2. Run the installer
+3. Optionally enable "Launch at Windows startup"
+
+### Option 2: Portable Version
+
+1. Download `MonitorSnap-vx.x.x-portable.zip` from [Releases](https://github.com/GTRows/MonitorSnap/releases)
+2. Extract and run `MonitorSnap.exe`
+3. No installation needed - fully portable
+
+### Option 3: Run from Source (For Developers)
 
 ```bash
 # Clone the repository
-git clone https://github.com/yourusername/DisplayPresets.git
-cd DisplayPresets
+git clone https://github.com/GTRows/MonitorSnap.git
+cd MonitorSnap
 
 # Install dependencies
 pip install -r requirements.txt
@@ -33,27 +51,15 @@ pip install -r requirements.txt
 python -m display_presets
 ```
 
-### Install as package
+### Build Your Own
 
 ```bash
-pip install -e .
-display-presets
-```
-
-### Standalone executable
-
-```bash
+# Build standalone executable
 python scripts/build_exe.py
+
+# Build installer (requires Inno Setup)
+"C:\Program Files (x86)\Inno Setup 6\ISCC.exe" setup.iss
 ```
-
-Run `dist\DisplayPresets.exe` - no Python needed.
-
-### Windows installer
-
-1. Build exe (see above)
-2. Download [Inno Setup](https://jrsoftware.org/isdl.php)
-3. Compile `setup.iss`
-4. Install from `installer\DisplayPresetsSetup.exe`
 
 ## Usage
 
@@ -71,10 +77,24 @@ Run `dist\DisplayPresets.exe` - no Python needed.
 
 ### Example Scenarios
 
-**Laptop + Docking Station Setup:**
+**KVM Switch Users:**
 ```
-Preset "Mobile":     Just laptop screen
-Preset "Docked":     Laptop + 2 external monitors in specific arrangement
+Preset "Work PC":      3 monitors in landscape (1440p @ 60Hz)
+Preset "Personal PC":  Main monitor 1440p @ 144Hz, side monitors portrait
+Preset "Gaming":       Single monitor 1440p @ 165Hz
+
+Hotkeys:
+- Ctrl+Shift+1 → Work PC
+- Ctrl+Shift+2 → Personal PC
+- Ctrl+Shift+3 → Gaming
+
+Switch your KVM, then press the hotkey - instant configuration!
+```
+
+**Laptop + Docking Station:**
+```
+Preset "Mobile":       Just laptop screen
+Preset "Docked":       Laptop + 2 external monitors
 Preset "Presentation": Laptop + projector (duplicate mode)
 
 Hotkeys:
@@ -83,11 +103,11 @@ Hotkeys:
 - Ctrl+Shift+3 → Presentation
 ```
 
-**Multi-Monitor Gaming Setup:**
+**Multi-Monitor Gaming/Productivity:**
 ```
-Preset "Gaming":       Main monitor 144Hz, others off
-Preset "Productivity": All monitors at native resolution
-Preset "Streaming":    Main monitor + side monitor for OBS
+Preset "Gaming":       Main monitor 144Hz fullscreen, others off
+Preset "Productivity": All 3 monitors at native resolution
+Preset "Streaming":    Main + side monitor for OBS/chat
 
 Press Ctrl+Shift+G to instantly switch to gaming mode!
 ```
