@@ -31,3 +31,6 @@ installer/
 *.swp
 *.swo
 *~
+
+# Development notes
+DEV.md
