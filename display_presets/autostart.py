@@ -1,5 +1,5 @@
 import winreg
-from config import get_exe_path
+from display_presets.config import get_exe_path
 
 
 REG_PATH = r"Software\Microsoft\Windows\CurrentVersion\Run"
