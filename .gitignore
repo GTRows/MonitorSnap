@@ -23,6 +23,7 @@ wheels/
 error.log
 settings.json
 presets/
+installer/
 
 .vscode/
 .idea/

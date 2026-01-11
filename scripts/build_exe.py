@@ -23,6 +23,15 @@ def build():
         "--name=MonitorSnap",
         f"--icon={icon_path}",
         "--add-data", f"{project_root / 'assets' / 'icons'};assets/icons",
+        "--hidden-import=display_presets.config",
+        "--hidden-import=display_presets.theme",
+        "--hidden-import=display_presets.display_config",
+        "--hidden-import=display_presets.preset_service",
+        "--hidden-import=display_presets.settings",
+        "--hidden-import=display_presets.hotkey_manager",
+        "--hidden-import=display_presets.autostart",
+        "--hidden-import=display_presets.gui",
+        "--hidden-import=display_presets.tray",
         str(project_root / "display_presets" / "__main__.py")
     ]
 
