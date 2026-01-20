@@ -31,6 +31,10 @@ class TrayApp:
         self.setup_tray()
         self.setup_global_hotkeys()
 
+        # Open GUI on startup unless start_minimized is enabled
+        if not self.settings.start_minimized:
+            self.open_gui()
+
     def create_icon(self):
         size = 64
         pixmap = QPixmap(size, size)
@@ -123,7 +127,7 @@ class TrayApp:
 
     def open_gui(self):
         if not self.gui:
-            self.gui = MainWindow(hotkey_manager=self.hotkey_manager)
+            self.gui = MainWindow(hotkey_manager=self.hotkey_manager, settings=self.settings)
             self.gui.setup_hotkeys()
             self.gui.closed.connect(self.on_gui_closed)
         self.gui.show()
@@ -150,15 +154,17 @@ class TrayApp:
             try:
                 cfg = self.display.get_current()
                 self.presets.save(name.strip(), cfg)
-                messagebox.showinfo(
-                    "Preset Saved Successfully",
-                    f"Preset '{name}' has been saved.\n\n"
-                    f"You can now apply it anytime from the tray menu.",
-                    parent=root
-                )
+                if self.settings.notify_preset_saved:
+                    messagebox.showinfo(
+                        "Preset Saved Successfully",
+                        f"Preset '{name}' has been saved.\n\n"
+                        f"You can now apply it anytime from the tray menu.",
+                        parent=root
+                    )
                 self.build_menu()
             except Exception as e:
-                messagebox.showerror("Error", f"Failed to save preset:\n{e}", parent=root)
+                if self.settings.show_error_messages:
+                    messagebox.showerror("Error", f"Failed to save preset:\n{e}", parent=root)
 
         root.destroy()
 
@@ -173,20 +179,22 @@ class TrayApp:
             root.attributes('-topmost', True)
 
             if result == 0:
-                messagebox.showinfo(
-                    "Display Configuration Applied",
-                    f"Preset '{name}' has been applied successfully.\n\n"
-                    f"Your monitors have been configured according to the saved settings.",
-                    parent=root
-                )
+                if self.settings.notify_preset_applied:
+                    messagebox.showinfo(
+                        "Display Configuration Applied",
+                        f"Preset '{name}' has been applied successfully.\n\n"
+                        f"Your monitors have been configured according to the saved settings.",
+                        parent=root
+                    )
             else:
-                messagebox.showerror(
-                    "Failed to Apply Configuration",
-                    f"Could not apply preset '{name}'.\n\n"
-                    f"Error code: {result}\n\n"
-                    f"Make sure all monitors from this preset are currently connected.",
-                    parent=root
-                )
+                if self.settings.show_error_messages:
+                    messagebox.showerror(
+                        "Failed to Apply Configuration",
+                        f"Could not apply preset '{name}'.\n\n"
+                        f"Error code: {result}\n\n"
+                        f"Make sure all monitors from this preset are currently connected.",
+                        parent=root
+                    )
 
             root.destroy()
         except Exception as e:
@@ -210,14 +218,16 @@ class TrayApp:
         if new_name and new_name.strip() and new_name != old_name:
             try:
                 self.presets.rename(old_name, new_name.strip())
-                messagebox.showinfo(
-                    "Preset Renamed",
-                    f"Preset has been renamed from '{old_name}' to '{new_name}'.",
-                    parent=root
-                )
+                if self.settings.notify_preset_renamed:
+                    messagebox.showinfo(
+                        "Preset Renamed",
+                        f"Preset has been renamed from '{old_name}' to '{new_name}'.",
+                        parent=root
+                    )
                 self.build_menu()
             except Exception as e:
-                messagebox.showerror("Error", f"Failed to rename preset:\n{e}", parent=root)
+                if self.settings.show_error_messages:
+                    messagebox.showerror("Error", f"Failed to rename preset:\n{e}", parent=root)
 
         root.destroy()
 
@@ -226,22 +236,29 @@ class TrayApp:
         root.withdraw()
         root.attributes('-topmost', True)
 
-        if messagebox.askyesno(
-            "Delete Preset",
-            f"Are you sure you want to delete preset '{name}'?\n\n"
-            f"This action cannot be undone.",
-            parent=root
-        ):
+        # Show confirmation dialog if enabled
+        confirm = True
+        if self.settings.confirm_preset_delete:
+            confirm = messagebox.askyesno(
+                "Delete Preset",
+                f"Are you sure you want to delete preset '{name}'?\n\n"
+                f"This action cannot be undone.",
+                parent=root
+            )
+
+        if confirm:
             try:
                 self.presets.delete(name)
-                messagebox.showinfo(
-                    "Preset Deleted",
-                    f"Preset '{name}' has been permanently deleted.",
-                    parent=root
-                )
+                if self.settings.notify_preset_deleted:
+                    messagebox.showinfo(
+                        "Preset Deleted",
+                        f"Preset '{name}' has been permanently deleted.",
+                        parent=root
+                    )
                 self.build_menu()
             except Exception as e:
-                messagebox.showerror("Error", f"Failed to delete preset:\n{e}", parent=root)
+                if self.settings.show_error_messages:
+                    messagebox.showerror("Error", f"Failed to delete preset:\n{e}", parent=root)
 
         root.destroy()
 
