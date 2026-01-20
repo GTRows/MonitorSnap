@@ -32,5 +32,6 @@ installer/
 *.swo
 *~
 
-# Development notes
+# Development files (local only)
 DEV.md
+dev.py
