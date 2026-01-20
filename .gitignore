@@ -31,3 +31,7 @@ installer/
 *.swp
 *.swo
 *~
+
+# Development files (local only)
+DEV.md
+dev.py
