@@ -1,7 +1,8 @@
 from PyQt6.QtWidgets import (QMainWindow, QWidget, QVBoxLayout, QHBoxLayout,
                              QTabWidget, QListWidget, QPushButton, QLabel,
                              QRadioButton, QButtonGroup, QMessageBox, QInputDialog,
-                             QTextEdit, QFrame, QScrollArea, QSplitter, QLineEdit)
+                             QTextEdit, QFrame, QScrollArea, QSplitter, QLineEdit,
+                             QStackedWidget, QCheckBox, QSlider)
 from PyQt6.QtCore import Qt, pyqtSignal, QFileSystemWatcher
 from PyQt6.QtGui import QFont, QPainter, QColor, QPen, QIcon
 from display_presets.display_config import DisplayConfigManager
@@ -10,6 +11,7 @@ from display_presets.settings import Settings
 from display_presets.hotkey_manager import HotkeyManager, parse_hotkey_string, format_hotkey
 from display_presets import autostart
 from display_presets.config import get_app_dir, get_presets_dir
+from display_presets.theme_colors import get_stylesheet, get_help_label_style, get_monitor_preview_colors, GitHubDark, GitHubLight
 import subprocess
 import os
 
@@ -196,16 +198,17 @@ class MonitorPreviewWidget(QFrame):
 class MainWindow(QMainWindow):
     closed = pyqtSignal()
 
-    def __init__(self, hotkey_manager=None):
+    def __init__(self, hotkey_manager=None, settings=None):
         super().__init__()
         self.display = DisplayConfigManager()
         self.presets = PresetService()
-        self.settings = Settings()
+        self.settings = settings if settings else Settings()
         self.hotkey_manager = hotkey_manager if hotkey_manager else HotkeyManager()
         self.preset_hotkeys = {}  # hotkey_id -> preset_name mapping
 
         self.setWindowTitle("Display Presets")
-        self.setGeometry(100, 100, 1100, 700)
+        # Use settings for window size
+        self.setGeometry(100, 100, self.settings.window_width, self.settings.window_height)
         self.setMinimumSize(1000, 650)
 
         # Set window icon
@@ -232,14 +235,14 @@ class MainWindow(QMainWindow):
         is_dark = self.settings.dark_mode
 
         if is_dark:
-            # Windows 11 Dark Theme - Fluent Design
+            # GitHub Dark Theme
             self.setStyleSheet("""
                 QMainWindow {
-                    background-color: #202020;
+                    background-color: #0d1117;
                 }
                 QWidget {
-                    background-color: #202020;
-                    color: #ffffff;
+                    background-color: #0d1117;
+                    color: #c9d1d9;
                     font-family: "Segoe UI Variable", "Segoe UI", system-ui, sans-serif;
                     font-size: 14px;
                 }
@@ -249,7 +252,7 @@ class MainWindow(QMainWindow):
                 }
                 QTabBar::tab {
                     background-color: transparent;
-                    color: #a0a0a0;
+                    color: #8b949e;
                     padding: 12px 24px;
                     margin-right: 4px;
                     border: none;
@@ -258,123 +261,185 @@ class MainWindow(QMainWindow):
                     font-weight: 400;
                 }
                 QTabBar::tab:selected {
-                    color: #ffffff;
-                    border-bottom: 2px solid #60cdff;
+                    color: #c9d1d9;
+                    border-bottom: 2px solid #1f6feb;
                 }
                 QTabBar::tab:hover:!selected {
-                    color: #e0e0e0;
+                    color: #c9d1d9;
                     background-color: rgba(255, 255, 255, 0.05);
                 }
                 QListWidget {
-                    background-color: rgba(255, 255, 255, 0.03);
-                    color: #ffffff;
-                    border: 1px solid rgba(255, 255, 255, 0.08);
-                    border-radius: 8px;
+                    background-color: #161b22;
+                    color: #c9d1d9;
+                    border: 1px solid #30363d;
+                    border-radius: 6px;
                     padding: 4px;
                     font-size: 14px;
                     outline: none;
                 }
                 QListWidget::item {
-                    background-color: rgba(255, 255, 255, 0.04);
-                    border: 1px solid rgba(255, 255, 255, 0.08);
+                    background-color: #0d1117;
+                    border: 1px solid #30363d;
                     border-radius: 6px;
                     padding: 14px 16px;
                     margin: 4px 2px;
                 }
                 QListWidget::item:selected {
-                    background-color: rgba(96, 205, 255, 0.15);
-                    border: 1px solid #60cdff;
-                    color: #ffffff;
+                    background-color: rgba(31, 111, 235, 0.15);
+                    border: 1px solid #1f6feb;
+                    color: #c9d1d9;
                 }
                 QListWidget::item:hover:!selected {
-                    background-color: rgba(255, 255, 255, 0.08);
-                    border-color: rgba(255, 255, 255, 0.12);
+                    background-color: #161b22;
+                    border-color: #484f58;
                 }
                 QPushButton {
-                    background-color: rgba(255, 255, 255, 0.06);
-                    color: #ffffff;
-                    border: 1px solid rgba(255, 255, 255, 0.08);
+                    background-color: #21262d;
+                    color: #c9d1d9;
+                    border: 1px solid #30363d;
                     border-radius: 6px;
                     padding: 10px 20px;
                     font-size: 14px;
-                    font-weight: 400;
+                    font-weight: 500;
                 }
                 QPushButton:hover {
-                    background-color: rgba(255, 255, 255, 0.09);
-                    border-color: rgba(255, 255, 255, 0.12);
+                    background-color: #30363d;
+                    border-color: #8b949e;
                 }
                 QPushButton:pressed {
-                    background-color: rgba(255, 255, 255, 0.03);
+                    background-color: #161b22;
                 }
                 QPushButton#primary {
-                    background-color: #0078d4;
+                    background-color: #238636;
                     color: #ffffff;
-                    border: 1px solid #0078d4;
+                    border: 1px solid #238636;
                 }
                 QPushButton#primary:hover {
-                    background-color: #1084d8;
+                    background-color: #2ea043;
                 }
                 QPushButton#primary:pressed {
-                    background-color: #006cbe;
+                    background-color: #196c2e;
                 }
                 QPushButton#danger {
-                    background-color: #c42b1c;
+                    background-color: #da3633;
                     color: #ffffff;
-                    border: 1px solid #c42b1c;
+                    border: 1px solid #da3633;
                 }
                 QPushButton#danger:hover {
-                    background-color: #d13438;
+                    background-color: #f85149;
                 }
                 QPushButton#danger:pressed {
-                    background-color: #a52313;
+                    background-color: #b62324;
                 }
                 QRadioButton {
-                    color: #ffffff;
-                    spacing: 10px;
+                    color: #c9d1d9;
+                    spacing: 12px;
                     font-size: 14px;
-                    padding: 8px;
+                    padding: 8px 4px;
                 }
                 QRadioButton::indicator {
-                    width: 20px;
-                    height: 20px;
-                    border-radius: 10px;
-                    border: 1px solid rgba(255, 255, 255, 0.54);
-                    background-color: transparent;
+                    width: 16px;
+                    height: 16px;
+                    border-radius: 8px;
+                    border: 1px solid #30363d;
+                    background-color: #0d1117;
                 }
                 QRadioButton::indicator:checked {
-                    border: 6px solid #60cdff;
-                    background-color: transparent;
+                    border: 5px solid #1f6feb;
+                    background-color: #0d1117;
                 }
                 QRadioButton::indicator:hover {
-                    border-color: #60cdff;
+                    border-color: #1f6feb;
+                }
+                QCheckBox {
+                    color: #c9d1d9;
+                    spacing: 12px;
+                    font-size: 14px;
+                    padding: 8px 4px;
+                }
+                QCheckBox::indicator {
+                    width: 16px;
+                    height: 16px;
+                    border-radius: 3px;
+                    border: 1px solid #30363d;
+                    background-color: #0d1117;
+                }
+                QCheckBox::indicator:checked {
+                    background-color: #238636;
+                    border: 1px solid #238636;
+                }
+                QCheckBox::indicator:hover {
+                    border-color: #238636;
+                }
+                QPushButton#category_button {
+                    background-color: transparent;
+                    color: #8b949e;
+                    border: none;
+                    border-radius: 0;
+                    padding: 16px 20px;
+                    text-align: left;
+                    font-size: 14px;
+                }
+                QPushButton#category_button:hover {
+                    background-color: #21262d;
+                    color: #c9d1d9;
+                }
+                QPushButton#category_button:checked {
+                    background-color: rgba(31, 111, 235, 0.15);
+                    color: #58a6ff;
+                    border-left: 3px solid #1f6feb;
+                }
+                QWidget#settings_sidebar {
+                    background-color: #161b22;
+                    border-right: 1px solid #30363d;
+                }
+                QSlider::groove:horizontal {
+                    background-color: #30363d;
+                    height: 6px;
+                    border-radius: 3px;
+                }
+                QSlider::sub-page:horizontal {
+                    background-color: #1f6feb;
+                    border-radius: 3px;
+                }
+                QSlider::handle:horizontal {
+                    background-color: #c9d1d9;
+                    border: 2px solid #1f6feb;
+                    width: 16px;
+                    height: 16px;
+                    margin: -6px 0;
+                    border-radius: 8px;
+                }
+                QSlider::handle:horizontal:hover {
+                    background-color: #1f6feb;
                 }
                 QTextEdit {
-                    background-color: rgba(255, 255, 255, 0.03);
-                    color: #ffffff;
-                    border: 1px solid rgba(255, 255, 255, 0.08);
+                    background-color: #161b22;
+                    color: #c9d1d9;
+                    border: 1px solid #30363d;
                     border-radius: 6px;
                     padding: 16px;
                     font-size: 14px;
                     line-height: 1.6;
-                    selection-background-color: rgba(96, 205, 255, 0.3);
+                    selection-background-color: rgba(31, 111, 235, 0.4);
                 }
                 QLabel {
-                    color: #ffffff;
+                    color: #c9d1d9;
                     background-color: transparent;
                 }
                 QLabel#title {
                     font-size: 32px;
                     font-weight: 600;
-                    color: #ffffff;
+                    color: #c9d1d9;
                 }
                 QLabel#subtitle {
                     font-size: 14px;
-                    color: #a0a0a0;
+                    color: #8b949e;
                 }
                 QLabel#section {
                     font-size: 18px;
                     font-weight: 600;
-                    color: #ffffff;
+                    color: #c9d1d9;
                     padding: 12px 0 8px 0;
                 }
                 QScrollArea {
@@ -382,37 +447,37 @@ class MainWindow(QMainWindow):
                     background-color: transparent;
                 }
                 QLineEdit {
-                    background-color: rgba(255, 255, 255, 0.06);
-                    color: #ffffff;
-                    border: 1px solid rgba(255, 255, 255, 0.12);
+                    background-color: #0d1117;
+                    color: #c9d1d9;
+                    border: 1px solid #30363d;
                     border-radius: 6px;
                     padding: 10px 14px;
                     font-size: 14px;
-                    selection-background-color: rgba(96, 205, 255, 0.3);
+                    selection-background-color: rgba(31, 111, 235, 0.4);
                 }
                 QLineEdit:focus {
-                    border: 2px solid #60cdff;
+                    border: 2px solid #1f6feb;
                     padding: 9px 13px;
                 }
                 QSplitter::handle {
-                    background-color: rgba(255, 255, 255, 0.08);
+                    background-color: #30363d;
                     width: 1px;
                 }
                 QFrame[frameShape="4"] {
-                    border: 1px solid rgba(255, 255, 255, 0.08);
-                    border-radius: 8px;
-                    background-color: rgba(255, 255, 255, 0.03);
+                    border: 1px solid #30363d;
+                    border-radius: 6px;
+                    background-color: #161b22;
                 }
             """)
         else:
-            # Windows 11 Light Theme - Fluent Design
+            # GitHub Light Theme
             self.setStyleSheet("""
                 QMainWindow {
-                    background-color: #f3f3f3;
+                    background-color: #ffffff;
                 }
                 QWidget {
-                    background-color: #f3f3f3;
-                    color: #1c1c1c;
+                    background-color: #ffffff;
+                    color: #24292f;
                     font-family: "Segoe UI Variable", "Segoe UI", system-ui, sans-serif;
                     font-size: 14px;
                 }
@@ -422,7 +487,7 @@ class MainWindow(QMainWindow):
                 }
                 QTabBar::tab {
                     background-color: transparent;
-                    color: #605e5c;
+                    color: #57606a;
                     padding: 12px 24px;
                     margin-right: 4px;
                     border: none;
@@ -431,123 +496,185 @@ class MainWindow(QMainWindow):
                     font-weight: 400;
                 }
                 QTabBar::tab:selected {
-                    color: #1c1c1c;
-                    border-bottom: 2px solid #0078d4;
+                    color: #24292f;
+                    border-bottom: 2px solid #0969da;
                 }
                 QTabBar::tab:hover:!selected {
-                    color: #323130;
+                    color: #24292f;
                     background-color: rgba(0, 0, 0, 0.03);
                 }
                 QListWidget {
-                    background-color: #ffffff;
-                    color: #1c1c1c;
-                    border: 1px solid rgba(0, 0, 0, 0.08);
-                    border-radius: 8px;
+                    background-color: #f6f8fa;
+                    color: #24292f;
+                    border: 1px solid #d0d7de;
+                    border-radius: 6px;
                     padding: 4px;
                     font-size: 14px;
                     outline: none;
                 }
                 QListWidget::item {
-                    background-color: #fafafa;
-                    border: 1px solid rgba(0, 0, 0, 0.06);
+                    background-color: #ffffff;
+                    border: 1px solid #d0d7de;
                     border-radius: 6px;
                     padding: 14px 16px;
                     margin: 4px 2px;
                 }
                 QListWidget::item:selected {
-                    background-color: rgba(0, 120, 212, 0.08);
-                    border: 1px solid #0078d4;
-                    color: #1c1c1c;
+                    background-color: rgba(9, 105, 218, 0.1);
+                    border: 1px solid #0969da;
+                    color: #24292f;
                 }
                 QListWidget::item:hover:!selected {
-                    background-color: rgba(0, 0, 0, 0.03);
-                    border-color: rgba(0, 0, 0, 0.1);
+                    background-color: #f6f8fa;
+                    border-color: #afb8c1;
                 }
                 QPushButton {
-                    background-color: #fafafa;
-                    color: #1c1c1c;
-                    border: 1px solid rgba(0, 0, 0, 0.08);
+                    background-color: #f6f8fa;
+                    color: #24292f;
+                    border: 1px solid #d0d7de;
                     border-radius: 6px;
                     padding: 10px 20px;
                     font-size: 14px;
-                    font-weight: 400;
+                    font-weight: 500;
                 }
                 QPushButton:hover {
-                    background-color: #f0f0f0;
-                    border-color: rgba(0, 0, 0, 0.12);
+                    background-color: #f3f4f6;
+                    border-color: #afb8c1;
                 }
                 QPushButton:pressed {
-                    background-color: #e8e8e8;
+                    background-color: #ebecf0;
                 }
                 QPushButton#primary {
-                    background-color: #0078d4;
+                    background-color: #1a7f37;
                     color: #ffffff;
-                    border: 1px solid #0078d4;
+                    border: 1px solid #1a7f37;
                 }
                 QPushButton#primary:hover {
-                    background-color: #106ebe;
+                    background-color: #2c974b;
                 }
                 QPushButton#primary:pressed {
-                    background-color: #005a9e;
+                    background-color: #116329;
                 }
                 QPushButton#danger {
-                    background-color: #d13438;
+                    background-color: #cf222e;
                     color: #ffffff;
-                    border: 1px solid #d13438;
+                    border: 1px solid #cf222e;
                 }
                 QPushButton#danger:hover {
-                    background-color: #e81123;
+                    background-color: #a40e26;
                 }
                 QPushButton#danger:pressed {
-                    background-color: #a80000;
+                    background-color: #82071e;
                 }
                 QRadioButton {
-                    color: #1c1c1c;
-                    spacing: 10px;
+                    color: #24292f;
+                    spacing: 12px;
                     font-size: 14px;
-                    padding: 8px;
+                    padding: 8px 4px;
                 }
                 QRadioButton::indicator {
-                    width: 20px;
-                    height: 20px;
-                    border-radius: 10px;
-                    border: 1px solid #605e5c;
+                    width: 16px;
+                    height: 16px;
+                    border-radius: 8px;
+                    border: 1px solid #d0d7de;
                     background-color: #ffffff;
                 }
                 QRadioButton::indicator:checked {
-                    border: 6px solid #0078d4;
+                    border: 5px solid #0969da;
                     background-color: #ffffff;
                 }
                 QRadioButton::indicator:hover {
-                    border-color: #0078d4;
+                    border-color: #0969da;
+                }
+                QCheckBox {
+                    color: #24292f;
+                    spacing: 12px;
+                    font-size: 14px;
+                    padding: 8px 4px;
+                }
+                QCheckBox::indicator {
+                    width: 16px;
+                    height: 16px;
+                    border-radius: 3px;
+                    border: 1px solid #d0d7de;
+                    background-color: #ffffff;
+                }
+                QCheckBox::indicator:checked {
+                    background-color: #1a7f37;
+                    border: 1px solid #1a7f37;
+                }
+                QCheckBox::indicator:hover {
+                    border-color: #1a7f37;
+                }
+                QPushButton#category_button {
+                    background-color: transparent;
+                    color: #57606a;
+                    border: none;
+                    border-radius: 0;
+                    padding: 16px 20px;
+                    text-align: left;
+                    font-size: 14px;
+                }
+                QPushButton#category_button:hover {
+                    background-color: rgba(0, 0, 0, 0.03);
+                    color: #24292f;
+                }
+                QPushButton#category_button:checked {
+                    background-color: rgba(9, 105, 218, 0.1);
+                    color: #0969da;
+                    border-left: 3px solid #0969da;
+                }
+                QWidget#settings_sidebar {
+                    background-color: #f6f8fa;
+                    border-right: 1px solid #d0d7de;
+                }
+                QSlider::groove:horizontal {
+                    background-color: #d0d7de;
+                    height: 6px;
+                    border-radius: 3px;
+                }
+                QSlider::sub-page:horizontal {
+                    background-color: #0969da;
+                    border-radius: 3px;
+                }
+                QSlider::handle:horizontal {
+                    background-color: #ffffff;
+                    border: 2px solid #0969da;
+                    width: 16px;
+                    height: 16px;
+                    margin: -6px 0;
+                    border-radius: 8px;
+                }
+                QSlider::handle:horizontal:hover {
+                    background-color: #0969da;
                 }
                 QTextEdit {
                     background-color: #ffffff;
-                    color: #1c1c1c;
-                    border: 1px solid rgba(0, 0, 0, 0.08);
+                    color: #24292f;
+                    border: 1px solid #d0d7de;
                     border-radius: 6px;
                     padding: 16px;
                     font-size: 14px;
                     line-height: 1.6;
-                    selection-background-color: rgba(0, 120, 212, 0.3);
+                    selection-background-color: rgba(9, 105, 218, 0.3);
                 }
                 QLabel {
-                    color: #1c1c1c;
+                    color: #24292f;
                     background-color: transparent;
                 }
                 QLabel#title {
                     font-size: 32px;
                     font-weight: 600;
-                    color: #1c1c1c;
+                    color: #24292f;
                 }
                 QLabel#subtitle {
                     font-size: 14px;
-                    color: #605e5c;
+                    color: #57606a;
                 }
                 QLabel#section {
                     font-size: 18px;
                     font-weight: 600;
-                    color: #1c1c1c;
+                    color: #24292f;
                     padding: 12px 0 8px 0;
                 }
                 QScrollArea {
@@ -556,25 +683,25 @@ class MainWindow(QMainWindow):
                 }
                 QLineEdit {
                     background-color: #ffffff;
-                    color: #1c1c1c;
-                    border: 1px solid rgba(0, 0, 0, 0.12);
+                    color: #24292f;
+                    border: 1px solid #d0d7de;
                     border-radius: 6px;
                     padding: 10px 14px;
                     font-size: 14px;
                     selection-background-color: rgba(0, 120, 212, 0.3);
                 }
                 QLineEdit:focus {
-                    border: 2px solid #0078d4;
+                    border: 2px solid #0969da;
                     padding: 9px 13px;
                 }
                 QSplitter::handle {
-                    background-color: rgba(0, 0, 0, 0.08);
+                    background-color: #d0d7de;
                     width: 1px;
                 }
                 QFrame[frameShape="4"] {
-                    border: 1px solid rgba(0, 0, 0, 0.08);
-                    border-radius: 8px;
-                    background-color: #ffffff;
+                    border: 1px solid #d0d7de;
+                    border-radius: 6px;
+                    background-color: #f6f8fa;
                 }
             """)
 
@@ -730,92 +857,48 @@ class MainWindow(QMainWindow):
         self.refresh_preset_list()
 
     def setup_settings_tab(self):
-        scroll = QScrollArea()
-        scroll.setWidgetResizable(True)
-        scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
-
-        content = QWidget()
-        layout = QVBoxLayout(content)
-        layout.setContentsMargins(32, 24, 32, 24)
-        layout.setSpacing(24)
-
-        # Header
-        title = QLabel("Settings")
-        title.setObjectName("title")
-        layout.addWidget(title)
-
-        # Appearance Section
-        appearance_label = QLabel("Appearance")
-        appearance_label.setObjectName("section")
-        layout.addWidget(appearance_label)
-
-        theme_group = QButtonGroup(self)
-        self.system_theme = QRadioButton("System theme")
-        self.dark_theme = QRadioButton("Dark")
-        self.light_theme = QRadioButton("Light")
-
-        theme_group.addButton(self.system_theme)
-        theme_group.addButton(self.dark_theme)
-        theme_group.addButton(self.light_theme)
-
-        if self.settings.theme_mode == "system":
-            self.system_theme.setChecked(True)
-        elif self.settings.theme_mode == "dark":
-            self.dark_theme.setChecked(True)
-        else:
-            self.light_theme.setChecked(True)
-
-        self.system_theme.toggled.connect(lambda: self.change_theme("system"))
-        self.dark_theme.toggled.connect(lambda: self.change_theme("dark"))
-        self.light_theme.toggled.connect(lambda: self.change_theme("light"))
-
-        layout.addWidget(self.system_theme)
-        layout.addWidget(self.dark_theme)
-        layout.addWidget(self.light_theme)
-
-        layout.addSpacing(8)
-
-        # Startup Section
-        startup_label = QLabel("Startup")
-        startup_label.setObjectName("section")
-        layout.addWidget(startup_label)
-
-        autostart_text = QLabel("Run Display Presets when Windows starts")
-        autostart_text.setObjectName("subtitle")
-        layout.addWidget(autostart_text)
-
-        autostart_btn = QPushButton("Enable autostart" if not autostart.is_enabled() else "Disable autostart")
-        autostart_btn.setMinimumHeight(36)
-        autostart_btn.setMaximumWidth(200)
-        autostart_btn.clicked.connect(self.toggle_autostart)
-        layout.addWidget(autostart_btn)
-        self.autostart_btn = autostart_btn
-
-        layout.addSpacing(8)
-
-        # Data Section
-        data_label = QLabel("Data")
-        data_label.setObjectName("section")
-        layout.addWidget(data_label)
-
-        folder_label = QLabel(str(get_app_dir()))
-        folder_label.setObjectName("subtitle")
-        folder_label.setWordWrap(True)
-        layout.addWidget(folder_label)
-
-        open_folder_btn = QPushButton("Open in Explorer")
-        open_folder_btn.setMinimumHeight(36)
-        open_folder_btn.setMaximumWidth(200)
-        open_folder_btn.clicked.connect(self.open_data_folder)
-        layout.addWidget(open_folder_btn)
-
-        layout.addStretch()
-
-        scroll.setWidget(content)
-
-        main_layout = QVBoxLayout(self.settings_tab)
+        # Main horizontal layout: categories on left, settings on right
+        main_layout = QHBoxLayout(self.settings_tab)
         main_layout.setContentsMargins(0, 0, 0, 0)
-        main_layout.addWidget(scroll)
+        main_layout.setSpacing(0)
+
+        # Left sidebar - Categories
+        sidebar = QWidget()
+        sidebar.setObjectName("settings_sidebar")
+        sidebar.setMinimumWidth(200)
+        sidebar.setMaximumWidth(200)
+        sidebar_layout = QVBoxLayout(sidebar)
+        sidebar_layout.setContentsMargins(0, 0, 0, 0)
+        sidebar_layout.setSpacing(0)
+
+        # Category buttons
+        self.category_buttons = []
+        categories = ["General", "Notifications", "Behavior", "Advanced"]
+
+        for category in categories:
+            btn = QPushButton(category)
+            btn.setObjectName("category_button")
+            btn.setCheckable(True)
+            btn.clicked.connect(lambda checked, c=category: self.switch_settings_category(c))
+            sidebar_layout.addWidget(btn)
+            self.category_buttons.append(btn)
+
+        sidebar_layout.addStretch()
+        main_layout.addWidget(sidebar)
+
+        # Right side - Settings content
+        self.settings_stack = QStackedWidget()
+        main_layout.addWidget(self.settings_stack)
+
+        # Create each category page
+        self.setup_general_settings()
+        self.setup_notification_settings()
+        self.setup_behavior_settings()
+        self.setup_advanced_settings()
+
+        # Select first category by default
+        self.category_buttons[0].setChecked(True)
+        self.settings_stack.setCurrentIndex(0)
 
     def setup_about_tab(self):
         scroll = QScrollArea()
@@ -928,9 +1011,13 @@ To contribute:
         for name in self.presets.list_names():
             self.preset_list.addItem(name)
 
-        # Restore selection if possible
-        if current_name:
-            items = self.preset_list.findItems(current_name, Qt.MatchFlag.MatchExactly)
+        # Restore selection - either from current or from settings
+        restore_name = current_name
+        if not restore_name and self.settings.remember_last_preset:
+            restore_name = self.settings.last_selected_preset
+
+        if restore_name:
+            items = self.preset_list.findItems(restore_name, Qt.MatchFlag.MatchExactly)
             if items:
                 self.preset_list.setCurrentItem(items[0])
 
@@ -949,6 +1036,12 @@ To contribute:
             return
 
         name = current.text()
+
+        # Save last selected preset if enabled
+        if self.settings.remember_last_preset:
+            self.settings.last_selected_preset = name
+            self.settings.save()
+
         try:
             # Load preset data
             data = self.presets.load(name)
@@ -1003,21 +1096,23 @@ To contribute:
             # Re-register hotkeys
             self.setup_hotkeys()
 
-            if hotkey_str:
-                QMessageBox.information(
-                    self,
-                    "Hotkey Assigned",
-                    f"Hotkey '{hotkey_str}' has been assigned to preset '{name}'.\n\n"
-                    f"You can now press {hotkey_str} anytime to instantly apply this preset."
-                )
-            else:
-                QMessageBox.information(
-                    self,
-                    "Hotkey Removed",
-                    f"Hotkey has been removed from preset '{name}'."
-                )
+            if self.settings.notify_hotkey_changed:
+                if hotkey_str:
+                    QMessageBox.information(
+                        self,
+                        "Hotkey Assigned",
+                        f"Hotkey '{hotkey_str}' has been assigned to preset '{name}'.\n\n"
+                        f"You can now press {hotkey_str} anytime to instantly apply this preset."
+                    )
+                else:
+                    QMessageBox.information(
+                        self,
+                        "Hotkey Removed",
+                        f"Hotkey has been removed from preset '{name}'."
+                    )
         except Exception as e:
-            QMessageBox.critical(self, "Error", f"Failed to save hotkey:\n{e}")
+            if self.settings.show_error_messages:
+                QMessageBox.critical(self, "Error", f"Failed to save hotkey:\n{e}")
 
     def setup_hotkeys(self):
         """Setup all hotkeys for presets"""
@@ -1080,20 +1175,25 @@ To contribute:
             result = self.display.apply(data['config'])
 
             if result == 0:
-                QMessageBox.information(
-                    self,
-                    "Display Configuration Applied",
-                    f"Preset '{name}' has been applied successfully.\n\n"
-                    f"Your monitors have been configured according to the saved settings."
-                )
+                if self.settings.notify_preset_applied:
+                    QMessageBox.information(
+                        self,
+                        "Display Configuration Applied",
+                        f"Preset '{name}' has been applied successfully.\n\n"
+                        f"Your monitors have been configured according to the saved settings."
+                    )
+                # Minimize window if enabled
+                if self.settings.minimize_after_apply:
+                    self.hide()
             else:
-                QMessageBox.critical(
-                    self,
-                    "Failed to Apply Configuration",
-                    f"Could not apply preset '{name}'.\n\n"
-                    f"Error code: {result}\n\n"
-                    f"Make sure all monitors from this preset are currently connected."
-                )
+                if self.settings.show_error_messages:
+                    QMessageBox.critical(
+                        self,
+                        "Failed to Apply Configuration",
+                        f"Could not apply preset '{name}'.\n\n"
+                        f"Error code: {result}\n\n"
+                        f"Make sure all monitors from this preset are currently connected."
+                    )
         except Exception as e:
             QMessageBox.critical(self, "Error", f"Failed to apply preset:\n{e}")
 
@@ -1113,15 +1213,17 @@ To contribute:
             try:
                 cfg = self.display.get_current()
                 self.presets.save(name.strip(), cfg)
-                QMessageBox.information(
-                    self,
-                    "Preset Saved Successfully",
-                    f"Preset '{name}' has been saved.\n\n"
-                    f"You can now apply this configuration anytime by selecting it from the list."
-                )
+                if self.settings.notify_preset_saved:
+                    QMessageBox.information(
+                        self,
+                        "Preset Saved Successfully",
+                        f"Preset '{name}' has been saved.\n\n"
+                        f"You can now apply this configuration anytime by selecting it from the list."
+                    )
                 self.refresh_preset_list()
             except Exception as e:
-                QMessageBox.critical(self, "Error", f"Failed to save preset:\n{e}")
+                if self.settings.show_error_messages:
+                    QMessageBox.critical(self, "Error", f"Failed to save preset:\n{e}")
 
     def rename_selected(self):
         current = self.preset_list.currentItem()
@@ -1144,14 +1246,16 @@ To contribute:
         if ok and new_name and new_name.strip() and new_name != old_name:
             try:
                 self.presets.rename(old_name, new_name.strip())
-                QMessageBox.information(
-                    self,
-                    "Preset Renamed",
-                    f"Preset has been renamed from '{old_name}' to '{new_name}'."
-                )
+                if self.settings.notify_preset_renamed:
+                    QMessageBox.information(
+                        self,
+                        "Preset Renamed",
+                        f"Preset has been renamed from '{old_name}' to '{new_name}'."
+                    )
                 self.refresh_preset_list()
             except Exception as e:
-                QMessageBox.critical(self, "Error", f"Failed to rename preset:\n{e}")
+                if self.settings.show_error_messages:
+                    QMessageBox.critical(self, "Error", f"Failed to rename preset:\n{e}")
 
     def delete_selected(self):
         current = self.preset_list.currentItem()
@@ -1164,33 +1268,46 @@ To contribute:
             return
 
         name = current.text()
-        reply = QMessageBox.question(
-            self,
-            "Delete Preset",
-            f"Are you sure you want to delete preset '{name}'?\n\n"
-            f"This action cannot be undone.",
-            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
-            QMessageBox.StandardButton.No
-        )
 
-        if reply == QMessageBox.StandardButton.Yes:
+        # Show confirmation dialog if enabled
+        confirm = True
+        if self.settings.confirm_preset_delete:
+            reply = QMessageBox.question(
+                self,
+                "Delete Preset",
+                f"Are you sure you want to delete preset '{name}'?\n\n"
+                f"This action cannot be undone.",
+                QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+                QMessageBox.StandardButton.No
+            )
+            confirm = reply == QMessageBox.StandardButton.Yes
+
+        if confirm:
             try:
                 self.presets.delete(name)
-                QMessageBox.information(
-                    self,
-                    "Preset Deleted",
-                    f"Preset '{name}' has been permanently deleted."
-                )
+                if self.settings.notify_preset_deleted:
+                    QMessageBox.information(
+                        self,
+                        "Preset Deleted",
+                        f"Preset '{name}' has been permanently deleted."
+                    )
                 self.refresh_preset_list()
             except Exception as e:
-                QMessageBox.critical(self, "Error", f"Failed to delete preset:\n{e}")
+                if self.settings.show_error_messages:
+                    QMessageBox.critical(self, "Error", f"Failed to delete preset:\n{e}")
 
     def change_theme(self, mode):
-        if self.sender().isChecked():
-            self.settings.set_theme(mode)
-            QMessageBox.information(self, "Theme changed",
-                                   "Restart the application to apply the new theme.")
-            self.closed.emit()
+        # Uncheck other theme buttons
+        for btn_mode, btn in self.theme_buttons:
+            if btn_mode != mode:
+                btn.setChecked(False)
+            else:
+                btn.setChecked(True)
+
+        self.settings.set_theme(mode)
+        QMessageBox.information(self, "Theme changed",
+                               "Restart the application to apply the new theme.")
+        self.closed.emit()
 
     def toggle_autostart(self):
         try:
@@ -1207,6 +1324,14 @@ To contribute:
         except Exception as e:
             QMessageBox.critical(self, "Error", f"Can't open folder:\n{e}")
 
+    def keyPressEvent(self, event):
+        """Handle keyboard shortcuts"""
+        from PyQt6.QtCore import Qt
+        if event.key() == Qt.Key.Key_Escape and self.settings.esc_to_minimize:
+            self.hide()
+        else:
+            super().keyPressEvent(event)
+
     def closeEvent(self, event):
         if event.spontaneous():
             # User clicked X button - just hide
@@ -1216,3 +1341,675 @@ To contribute:
             # App is closing
             self.hotkey_manager.stop_listening()
             event.accept()
+
+    def switch_settings_category(self, category):
+        """Switch between settings categories"""
+        category_map = {
+            "General": 0,
+            "Notifications": 1,
+            "Behavior": 2,
+            "Advanced": 3
+        }
+
+        index = category_map.get(category, 0)
+        self.settings_stack.setCurrentIndex(index)
+
+        # Update button states
+        for i, btn in enumerate(self.category_buttons):
+            btn.setChecked(i == index)
+
+    def create_help_label(self, tooltip_text):
+        """Create a help icon (?) with tooltip - shows instantly on hover"""
+        from PyQt6.QtWidgets import QToolTip
+
+        class HoverHelpLabel(QLabel):
+            def __init__(self, text, tooltip, parent=None):
+                super().__init__(text, parent)
+                self._tooltip = tooltip
+
+            def enterEvent(self, event):
+                # Show tooltip immediately on hover (no delay)
+                QToolTip.showText(self.mapToGlobal(self.rect().bottomLeft()), self._tooltip, self)
+                super().enterEvent(event)
+
+        help_label = HoverHelpLabel("?", tooltip_text)
+
+        # GitHub themed colors
+        if self.settings.dark_mode:
+            help_label.setStyleSheet("""
+                QLabel {
+                    background-color: rgba(88, 166, 255, 0.15);
+                    color: #58a6ff;
+                    border: 1px solid #58a6ff;
+                    border-radius: 9px;
+                    font-size: 11px;
+                    font-weight: bold;
+                    padding: 2px;
+                    min-width: 16px;
+                    max-width: 16px;
+                    min-height: 16px;
+                    max-height: 16px;
+                }
+                QLabel:hover {
+                    background-color: rgba(88, 166, 255, 0.3);
+                }
+            """)
+        else:
+            help_label.setStyleSheet("""
+                QLabel {
+                    background-color: rgba(9, 105, 218, 0.1);
+                    color: #0969da;
+                    border: 1px solid #0969da;
+                    border-radius: 9px;
+                    font-size: 11px;
+                    font-weight: bold;
+                    padding: 2px;
+                    min-width: 16px;
+                    max-width: 16px;
+                    min-height: 16px;
+                    max-height: 16px;
+                }
+                QLabel:hover {
+                    background-color: rgba(9, 105, 218, 0.2);
+                }
+            """)
+
+        help_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        return help_label
+
+    def create_setting_row(self, widget, help_text):
+        """Create a row with widget and help icon"""
+        row = QHBoxLayout()
+        row.setSpacing(8)
+        row.addWidget(widget)
+        row.addWidget(self.create_help_label(help_text))
+        row.addStretch()
+        return row
+
+    def setup_general_settings(self):
+        """General settings page"""
+        scroll = QScrollArea()
+        scroll.setWidgetResizable(True)
+        scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+
+        content = QWidget()
+        layout = QVBoxLayout(content)
+        layout.setContentsMargins(32, 24, 32, 24)
+        layout.setSpacing(24)
+
+        # Header
+        title = QLabel("General Settings")
+        title.setObjectName("section")
+        layout.addWidget(title)
+
+        # Theme Section
+        theme_label = QLabel("Theme")
+        theme_label.setObjectName("subtitle")
+        layout.addWidget(theme_label)
+
+        # Theme selector with card-style buttons
+        theme_container = QWidget()
+        theme_layout = QHBoxLayout(theme_container)
+        theme_layout.setContentsMargins(0, 8, 0, 0)
+        theme_layout.setSpacing(12)
+
+        self.theme_buttons = []
+        theme_options = [
+            ("system", "System", "Follow your Windows theme settings"),
+            ("dark", "Dark", "Dark background with light text"),
+            ("light", "Light", "Light background with dark text"),
+        ]
+
+        # Get theme colors for styling
+        is_dark = self.settings.dark_mode
+        if is_dark:
+            card_bg = "#161b22"
+            card_bg_hover = "#21262d"
+            card_bg_selected = "rgba(31, 111, 235, 0.15)"
+            card_border = "#30363d"
+            card_border_selected = "#1f6feb"
+            text_primary = "#c9d1d9"
+            text_secondary = "#8b949e"
+        else:
+            card_bg = "#f6f8fa"
+            card_bg_hover = "#f3f4f6"
+            card_bg_selected = "rgba(9, 105, 218, 0.1)"
+            card_border = "#d0d7de"
+            card_border_selected = "#0969da"
+            text_primary = "#24292f"
+            text_secondary = "#57606a"
+
+        for mode, label, description in theme_options:
+            btn = QPushButton()
+            btn.setCheckable(True)
+            btn.setMinimumHeight(80)
+            btn.setMinimumWidth(140)
+
+            # Create layout for button content
+            btn_layout = QVBoxLayout(btn)
+            btn_layout.setContentsMargins(16, 12, 16, 12)
+            btn_layout.setSpacing(4)
+
+            title_label = QLabel(label)
+            title_label.setStyleSheet(f"font-weight: 600; font-size: 14px; color: {text_primary}; background: transparent;")
+
+            desc_label = QLabel(description)
+            desc_label.setWordWrap(True)
+            desc_label.setStyleSheet(f"font-size: 11px; color: {text_secondary}; background: transparent;")
+
+            btn_layout.addWidget(title_label)
+            btn_layout.addWidget(desc_label)
+            btn_layout.addStretch()
+
+            # Style the button
+            btn.setStyleSheet(f"""
+                QPushButton {{
+                    background-color: {card_bg};
+                    border: 1px solid {card_border};
+                    border-radius: 8px;
+                    text-align: left;
+                }}
+                QPushButton:hover {{
+                    background-color: {card_bg_hover};
+                    border-color: {card_border_selected};
+                }}
+                QPushButton:checked {{
+                    background-color: {card_bg_selected};
+                    border: 2px solid {card_border_selected};
+                }}
+            """)
+
+            # Check if this is the current theme
+            if self.settings.theme_mode == mode:
+                btn.setChecked(True)
+
+            btn.clicked.connect(lambda checked, m=mode: self.change_theme(m) if checked else None)
+            theme_layout.addWidget(btn)
+            self.theme_buttons.append((mode, btn))
+
+        theme_layout.addStretch()
+        layout.addWidget(theme_container)
+
+        layout.addSpacing(16)
+
+        # Startup options
+        startup_label = QLabel("Startup")
+        startup_label.setObjectName("subtitle")
+        layout.addWidget(startup_label)
+
+        self.start_with_windows_cb = QCheckBox("Start with Windows")
+        self.start_with_windows_cb.setChecked(autostart.is_enabled())
+        self.start_with_windows_cb.stateChanged.connect(self.on_start_with_windows_changed)
+        layout.addLayout(self.create_setting_row(
+            self.start_with_windows_cb,
+            "Automatically start Display Presets when Windows boots up"
+        ))
+
+        self.start_minimized_cb = QCheckBox("Start minimized to tray")
+        self.start_minimized_cb.setChecked(self.settings.start_minimized)
+        self.start_minimized_cb.stateChanged.connect(self.on_start_minimized_changed)
+        layout.addLayout(self.create_setting_row(
+            self.start_minimized_cb,
+            "Start the application in the system tray without opening the main window"
+        ))
+
+        layout.addSpacing(16)
+
+        # Preset options
+        preset_label = QLabel("Presets")
+        preset_label.setObjectName("subtitle")
+        layout.addWidget(preset_label)
+
+        self.remember_preset_cb = QCheckBox("Remember last selected preset")
+        self.remember_preset_cb.setChecked(self.settings.remember_last_preset)
+        self.remember_preset_cb.stateChanged.connect(self.on_remember_preset_changed)
+        layout.addLayout(self.create_setting_row(
+            self.remember_preset_cb,
+            "When opening the app, automatically select the last preset you were viewing"
+        ))
+
+        layout.addSpacing(16)
+
+        # Data folder
+        data_label = QLabel("Data Location")
+        data_label.setObjectName("subtitle")
+        layout.addWidget(data_label)
+
+        folder_label = QLabel(str(get_app_dir()))
+        folder_label.setWordWrap(True)
+        layout.addWidget(folder_label)
+
+        open_folder_btn = QPushButton("Open in Explorer")
+        open_folder_btn.setMinimumHeight(36)
+        open_folder_btn.setMaximumWidth(200)
+        open_folder_btn.clicked.connect(self.open_data_folder)
+        layout.addWidget(open_folder_btn)
+
+        layout.addStretch()
+        scroll.setWidget(content)
+        self.settings_stack.addWidget(scroll)
+
+    def setup_notification_settings(self):
+        """Notification settings page"""
+        scroll = QScrollArea()
+        scroll.setWidgetResizable(True)
+        scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+
+        content = QWidget()
+        layout = QVBoxLayout(content)
+        layout.setContentsMargins(32, 24, 32, 24)
+        layout.setSpacing(24)
+
+        # Header
+        title = QLabel("Notification Settings")
+        title.setObjectName("section")
+        layout.addWidget(title)
+
+        subtitle = QLabel("Choose which notifications to display")
+        subtitle.setObjectName("subtitle")
+        layout.addWidget(subtitle)
+
+        layout.addSpacing(8)
+
+        # Success notifications
+        success_label = QLabel("Success Notifications")
+        success_label.setObjectName("subtitle")
+        layout.addWidget(success_label)
+
+        self.notify_applied_cb = QCheckBox("Show notification when preset is applied")
+        self.notify_applied_cb.setChecked(self.settings.notify_preset_applied)
+        self.notify_applied_cb.stateChanged.connect(self.on_notify_applied_changed)
+        layout.addLayout(self.create_setting_row(
+            self.notify_applied_cb,
+            "Display a popup notification when you successfully apply a display preset"
+        ))
+
+        self.notify_saved_cb = QCheckBox("Show notification when preset is saved")
+        self.notify_saved_cb.setChecked(self.settings.notify_preset_saved)
+        self.notify_saved_cb.stateChanged.connect(self.on_notify_saved_changed)
+        layout.addLayout(self.create_setting_row(
+            self.notify_saved_cb,
+            "Display a popup notification when you save a new preset"
+        ))
+
+        self.notify_renamed_cb = QCheckBox("Show notification when preset is renamed")
+        self.notify_renamed_cb.setChecked(self.settings.notify_preset_renamed)
+        self.notify_renamed_cb.stateChanged.connect(self.on_notify_renamed_changed)
+        layout.addLayout(self.create_setting_row(
+            self.notify_renamed_cb,
+            "Display a popup notification when you rename a preset"
+        ))
+
+        self.notify_deleted_cb = QCheckBox("Show notification when preset is deleted")
+        self.notify_deleted_cb.setChecked(self.settings.notify_preset_deleted)
+        self.notify_deleted_cb.stateChanged.connect(self.on_notify_deleted_changed)
+        layout.addLayout(self.create_setting_row(
+            self.notify_deleted_cb,
+            "Display a popup notification when you delete a preset"
+        ))
+
+        self.notify_hotkey_cb = QCheckBox("Show notification when hotkey is assigned/removed")
+        self.notify_hotkey_cb.setChecked(self.settings.notify_hotkey_changed)
+        self.notify_hotkey_cb.stateChanged.connect(self.on_notify_hotkey_changed)
+        layout.addLayout(self.create_setting_row(
+            self.notify_hotkey_cb,
+            "Display a popup notification when you assign or remove a hotkey from a preset"
+        ))
+
+        layout.addSpacing(16)
+
+        # Confirmation dialogs
+        confirm_label = QLabel("Confirmation Dialogs")
+        confirm_label.setObjectName("subtitle")
+        layout.addWidget(confirm_label)
+
+        self.confirm_delete_cb = QCheckBox("Ask for confirmation before deleting presets")
+        self.confirm_delete_cb.setChecked(self.settings.confirm_preset_delete)
+        self.confirm_delete_cb.stateChanged.connect(self.on_confirm_delete_changed)
+        layout.addLayout(self.create_setting_row(
+            self.confirm_delete_cb,
+            "Show a confirmation dialog before permanently deleting a preset to prevent accidental deletion"
+        ))
+
+        layout.addStretch()
+        scroll.setWidget(content)
+        self.settings_stack.addWidget(scroll)
+
+    def setup_behavior_settings(self):
+        """Behavior settings page"""
+        scroll = QScrollArea()
+        scroll.setWidgetResizable(True)
+        scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+
+        content = QWidget()
+        layout = QVBoxLayout(content)
+        layout.setContentsMargins(32, 24, 32, 24)
+        layout.setSpacing(24)
+
+        # Header
+        title = QLabel("Behavior Settings")
+        title.setObjectName("section")
+        layout.addWidget(title)
+
+        subtitle = QLabel("Customize application behavior")
+        subtitle.setObjectName("subtitle")
+        layout.addWidget(subtitle)
+
+        layout.addSpacing(8)
+
+        # Window behavior
+        window_label = QLabel("Window Behavior")
+        window_label.setObjectName("subtitle")
+        layout.addWidget(window_label)
+
+        self.minimize_after_apply_cb = QCheckBox("Minimize window after applying preset")
+        self.minimize_after_apply_cb.setChecked(self.settings.minimize_after_apply)
+        self.minimize_after_apply_cb.stateChanged.connect(self.on_minimize_after_apply_changed)
+        layout.addLayout(self.create_setting_row(
+            self.minimize_after_apply_cb,
+            "Automatically minimize the window to system tray after successfully applying a preset"
+        ))
+
+        self.esc_to_minimize_cb = QCheckBox("Press ESC to minimize window")
+        self.esc_to_minimize_cb.setChecked(self.settings.esc_to_minimize)
+        self.esc_to_minimize_cb.stateChanged.connect(self.on_esc_to_minimize_changed)
+        layout.addLayout(self.create_setting_row(
+            self.esc_to_minimize_cb,
+            "Allow pressing the ESC key to quickly minimize the window to system tray"
+        ))
+
+        layout.addStretch()
+        scroll.setWidget(content)
+        self.settings_stack.addWidget(scroll)
+
+    def setup_advanced_settings(self):
+        """Advanced settings page"""
+        scroll = QScrollArea()
+        scroll.setWidgetResizable(True)
+        scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+
+        content = QWidget()
+        layout = QVBoxLayout(content)
+        layout.setContentsMargins(32, 24, 32, 24)
+        layout.setSpacing(24)
+
+        # Header
+        title = QLabel("Advanced Settings")
+        title.setObjectName("section")
+        layout.addWidget(title)
+
+        subtitle = QLabel("Advanced options for power users")
+        subtitle.setObjectName("subtitle")
+        layout.addWidget(subtitle)
+
+        layout.addSpacing(8)
+
+        # Font size
+        font_header = QHBoxLayout()
+        font_label = QLabel("Font Size")
+        font_label.setObjectName("subtitle")
+        font_header.addWidget(font_label)
+        font_header.addWidget(self.create_help_label(
+            "Adjust the size of all text in the application. Restart required for full effect."
+        ))
+        font_header.addStretch()
+        layout.addLayout(font_header)
+
+        # Font size slider container
+        font_container = QWidget()
+        font_container_layout = QVBoxLayout(font_container)
+        font_container_layout.setContentsMargins(0, 0, 0, 0)
+        font_container_layout.setSpacing(8)
+
+        # Current value - large and centered
+        font_value_label = QLabel(f"{self.settings.font_size_multiplier:.1f}x")
+        font_value_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        font_value_label.setStyleSheet("font-size: 24px; font-weight: 600; padding: 8px;")
+        font_container_layout.addWidget(font_value_label)
+
+        # Slider with min/max labels
+        slider_row = QHBoxLayout()
+        slider_row.setSpacing(12)
+
+        min_label = QLabel("Small\n0.8x")
+        min_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        min_label.setStyleSheet("font-size: 11px; color: #888;")
+
+        font_slider = QSlider(Qt.Orientation.Horizontal)
+        font_slider.setMinimum(8)  # 0.8x
+        font_slider.setMaximum(15)  # 1.5x
+        font_slider.setValue(int(self.settings.font_size_multiplier * 10))
+        font_slider.setTickPosition(QSlider.TickPosition.TicksBelow)
+        font_slider.setTickInterval(2)
+        font_slider.valueChanged.connect(lambda v: self.on_font_size_changed(v, font_value_label))
+
+        max_label = QLabel("Large\n1.5x")
+        max_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        max_label.setStyleSheet("font-size: 11px; color: #888;")
+
+        slider_row.addWidget(min_label)
+        slider_row.addWidget(font_slider, 1)
+        slider_row.addWidget(max_label)
+
+        font_container_layout.addLayout(slider_row)
+        layout.addWidget(font_container)
+
+        layout.addSpacing(16)
+
+        # Window size
+        window_header = QHBoxLayout()
+        window_label = QLabel("Window Size")
+        window_label.setObjectName("subtitle")
+        window_header.addWidget(window_label)
+        window_header.addWidget(self.create_help_label(
+            "Set the default window size (width × height in pixels). Takes effect on next app start."
+        ))
+        window_header.addStretch()
+        layout.addLayout(window_header)
+
+        size_layout = QHBoxLayout()
+        size_layout.setSpacing(16)
+
+        width_input = QLineEdit(str(self.settings.window_width))
+        width_input.setPlaceholderText("Width (1000-2000)")
+        width_input.setMaximumWidth(150)
+        width_input.textChanged.connect(lambda v: self.on_window_width_changed(v))
+
+        height_input = QLineEdit(str(self.settings.window_height))
+        height_input.setPlaceholderText("Height (650-1500)")
+        height_input.setMaximumWidth(150)
+        height_input.textChanged.connect(lambda v: self.on_window_height_changed(v))
+
+        size_layout.addWidget(QLabel("Width:"))
+        size_layout.addWidget(width_input)
+        size_layout.addWidget(QLabel("Height:"))
+        size_layout.addWidget(height_input)
+        size_layout.addStretch()
+
+        layout.addLayout(size_layout)
+
+        layout.addSpacing(16)
+
+        # Import/Export
+        backup_header = QHBoxLayout()
+        import_export_label = QLabel("Settings Backup")
+        import_export_label.setObjectName("subtitle")
+        backup_header.addWidget(import_export_label)
+        backup_header.addWidget(self.create_help_label(
+            "Export your settings to a JSON file for backup, or import settings from another computer"
+        ))
+        backup_header.addStretch()
+        layout.addLayout(backup_header)
+
+        btn_layout = QHBoxLayout()
+        btn_layout.setSpacing(16)
+
+        export_btn = QPushButton("Export Settings")
+        export_btn.setMinimumHeight(36)
+        export_btn.setMaximumWidth(150)
+        export_btn.clicked.connect(self.export_settings)
+
+        import_btn = QPushButton("Import Settings")
+        import_btn.setMinimumHeight(36)
+        import_btn.setMaximumWidth(150)
+        import_btn.clicked.connect(self.import_settings)
+
+        btn_layout.addWidget(export_btn)
+        btn_layout.addWidget(import_btn)
+        btn_layout.addStretch()
+
+        layout.addLayout(btn_layout)
+
+        layout.addSpacing(16)
+
+        # Reset
+        reset_header = QHBoxLayout()
+        reset_label = QLabel("Reset Settings")
+        reset_label.setObjectName("subtitle")
+        reset_header.addWidget(reset_label)
+        reset_header.addWidget(self.create_help_label(
+            "Reset all settings to their default values. This action cannot be undone. Presets are not affected."
+        ))
+        reset_header.addStretch()
+        layout.addLayout(reset_header)
+
+        reset_btn = QPushButton("Reset All Settings to Defaults")
+        reset_btn.setMinimumHeight(36)
+        reset_btn.setMaximumWidth(250)
+        reset_btn.setObjectName("danger")
+        reset_btn.clicked.connect(self.reset_all_settings)
+        layout.addWidget(reset_btn)
+
+        layout.addStretch()
+        scroll.setWidget(content)
+        self.settings_stack.addWidget(scroll)
+
+    # Settings callbacks
+    def on_start_with_windows_changed(self, state):
+        try:
+            enabled = state == Qt.CheckState.Checked.value
+            if enabled != autostart.is_enabled():
+                autostart.toggle()
+            self.settings.start_with_windows = enabled
+            self.settings.save()
+        except Exception as e:
+            QMessageBox.critical(self, "Error", f"Failed to change autostart:\n{e}")
+
+    def on_start_minimized_changed(self, state):
+        self.settings.start_minimized = state == Qt.CheckState.Checked.value
+        self.settings.save()
+
+    def on_remember_preset_changed(self, state):
+        self.settings.remember_last_preset = state == Qt.CheckState.Checked.value
+        self.settings.save()
+
+    def on_notify_applied_changed(self, state):
+        self.settings.notify_preset_applied = state == Qt.CheckState.Checked.value
+        self.settings.save()
+
+    def on_notify_saved_changed(self, state):
+        self.settings.notify_preset_saved = state == Qt.CheckState.Checked.value
+        self.settings.save()
+
+    def on_notify_renamed_changed(self, state):
+        self.settings.notify_preset_renamed = state == Qt.CheckState.Checked.value
+        self.settings.save()
+
+    def on_notify_deleted_changed(self, state):
+        self.settings.notify_preset_deleted = state == Qt.CheckState.Checked.value
+        self.settings.save()
+
+    def on_notify_hotkey_changed(self, state):
+        self.settings.notify_hotkey_changed = state == Qt.CheckState.Checked.value
+        self.settings.save()
+
+    def on_confirm_delete_changed(self, state):
+        self.settings.confirm_preset_delete = state == Qt.CheckState.Checked.value
+        self.settings.save()
+
+    def on_minimize_after_apply_changed(self, state):
+        self.settings.minimize_after_apply = state == Qt.CheckState.Checked.value
+        self.settings.save()
+
+    def on_esc_to_minimize_changed(self, state):
+        self.settings.esc_to_minimize = state == Qt.CheckState.Checked.value
+        self.settings.save()
+
+    def on_font_size_changed(self, value, label):
+        multiplier = value / 10.0
+        label.setText(f"{multiplier:.1f}x")
+        self.settings.font_size_multiplier = multiplier
+        self.settings.save()
+
+    def on_window_width_changed(self, value):
+        try:
+            width = int(value)
+            if 1000 <= width <= 2000:
+                self.settings.window_width = width
+                self.settings.save()
+        except ValueError:
+            pass
+
+    def on_window_height_changed(self, value):
+        try:
+            height = int(value)
+            if 650 <= height <= 1500:
+                self.settings.window_height = height
+                self.settings.save()
+        except ValueError:
+            pass
+
+    def export_settings(self):
+        from PyQt6.QtWidgets import QFileDialog
+        file_path, _ = QFileDialog.getSaveFileName(
+            self,
+            "Export Settings",
+            "display_presets_settings.json",
+            "JSON Files (*.json)"
+        )
+        if file_path:
+            try:
+                import json
+                with open(file_path, 'w') as f:
+                    json.dump(self.settings.export_to_dict(), f, indent=2)
+                QMessageBox.information(self, "Export Successful", f"Settings exported to:\n{file_path}")
+            except Exception as e:
+                QMessageBox.critical(self, "Export Failed", f"Failed to export settings:\n{e}")
+
+    def import_settings(self):
+        from PyQt6.QtWidgets import QFileDialog
+        file_path, _ = QFileDialog.getOpenFileName(
+            self,
+            "Import Settings",
+            "",
+            "JSON Files (*.json)"
+        )
+        if file_path:
+            try:
+                import json
+                with open(file_path, 'r') as f:
+                    data = json.load(f)
+                self.settings.import_from_dict(data)
+                QMessageBox.information(
+                    self,
+                    "Import Successful",
+                    "Settings imported successfully.\nPlease restart the application for changes to take effect."
+                )
+            except Exception as e:
+                QMessageBox.critical(self, "Import Failed", f"Failed to import settings:\n{e}")
+
+    def reset_all_settings(self):
+        reply = QMessageBox.question(
+            self,
+            "Reset All Settings",
+            "Are you sure you want to reset all settings to default values?\nThis action cannot be undone.",
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+            QMessageBox.StandardButton.No
+        )
+        if reply == QMessageBox.StandardButton.Yes:
+            self.settings.reset_to_defaults()
+            QMessageBox.information(
+                self,
+                "Settings Reset",
+                "All settings have been reset to defaults.\nPlease restart the application for changes to take effect."
+            )
