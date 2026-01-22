@@ -1039,12 +1039,12 @@ class MainWindow(QMainWindow):
         edit_actions_layout.setContentsMargins(0, 8, 0, 0)
         edit_actions_layout.setSpacing(8)
 
-        self.apply_layout_btn = QPushButton("Apply Layout")
-        self.apply_layout_btn.setObjectName("primary")
-        self.apply_layout_btn.setMinimumHeight(36)
-        self.apply_layout_btn.setToolTip("Apply the modified layout to your displays")
-        self.apply_layout_btn.clicked.connect(self.apply_edited_layout)
-        edit_actions_layout.addWidget(self.apply_layout_btn)
+        self.save_layout_btn = QPushButton("Save Layout")
+        self.save_layout_btn.setObjectName("primary")
+        self.save_layout_btn.setMinimumHeight(36)
+        self.save_layout_btn.setToolTip("Save the modified layout to this preset")
+        self.save_layout_btn.clicked.connect(self.save_edited_layout)
+        edit_actions_layout.addWidget(self.save_layout_btn)
 
         self.save_as_preset_btn = QPushButton("Save as New Preset")
         self.save_as_preset_btn.setMinimumHeight(36)
@@ -1337,34 +1337,41 @@ To contribute:
         """Called when primary monitor is changed in edit mode"""
         pass
 
-    def apply_edited_layout(self):
-        """Apply the edited layout to displays"""
+    def save_edited_layout(self):
+        """Save the edited layout to the current preset"""
         modified_config = self.monitor_preview.get_modified_config()
         if not modified_config:
             return
 
+        current = self.preset_list.currentItem()
+        if not current:
+            QMessageBox.warning(self, "No Preset", "No preset selected to save.")
+            return
+
+        preset_name = current.text()
+
         try:
-            result = self.display.apply(modified_config['config'])
-            if result == 0:
-                if self.settings.notify_preset_applied:
-                    QMessageBox.information(
-                        self,
-                        "Layout Applied",
-                        "The modified display layout has been applied successfully."
-                    )
-                # Exit edit mode
-                self.edit_mode_btn.setChecked(False)
-                self.toggle_edit_mode()
-            else:
-                if self.settings.show_error_messages:
-                    QMessageBox.critical(
-                        self,
-                        "Failed to Apply Layout",
-                        f"Could not apply the modified layout.\nError code: {result}"
-                    )
+            # Load existing preset to preserve hotkey and other data
+            existing_data = self.presets.load(preset_name)
+            hotkey = existing_data.get('hotkey')
+            self.presets.save(preset_name, modified_config['config'], hotkey)
+
+            # Update preview with saved config
+            self.monitor_preview.set_config(modified_config)
+            self._original_config = modified_config
+
+            if self.settings.notify_preset_saved:
+                QMessageBox.information(
+                    self,
+                    "Layout Saved",
+                    f"Preset '{preset_name}' has been updated with the new layout."
+                )
+            # Exit edit mode
+            self.edit_mode_btn.setChecked(False)
+            self.toggle_edit_mode()
         except Exception as e:
             if self.settings.show_error_messages:
-                QMessageBox.critical(self, "Error", f"Failed to apply layout:\n{e}")
+                QMessageBox.critical(self, "Error", f"Failed to save layout:\n{e}")
 
     def save_edited_as_preset(self):
         """Save the edited layout as a new preset"""
