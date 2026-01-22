@@ -2,9 +2,9 @@ from PyQt6.QtWidgets import (QMainWindow, QWidget, QVBoxLayout, QHBoxLayout,
                              QTabWidget, QListWidget, QPushButton, QLabel,
                              QRadioButton, QButtonGroup, QMessageBox, QInputDialog,
                              QTextEdit, QFrame, QScrollArea, QSplitter, QLineEdit,
-                             QStackedWidget, QCheckBox, QSlider)
-from PyQt6.QtCore import Qt, pyqtSignal, QFileSystemWatcher
-from PyQt6.QtGui import QFont, QPainter, QColor, QPen, QIcon
+                             QStackedWidget, QCheckBox, QSlider, QToolTip)
+from PyQt6.QtCore import Qt, pyqtSignal, QFileSystemWatcher, QPoint, QRect, QRectF
+from PyQt6.QtGui import QFont, QPainter, QColor, QPen, QIcon, QCursor, QBrush
 from display_presets.display_config import DisplayConfigManager
 from display_presets.preset_service import PresetService
 from display_presets.settings import Settings
@@ -17,33 +17,87 @@ import os
 
 
 class MonitorPreviewWidget(QFrame):
-    """Visual preview of monitor configuration"""
+    """Interactive visual preview of monitor configuration with edit mode"""
+
+    # Signals
+    config_changed = pyqtSignal(dict)  # Emitted when monitors are moved in edit mode
+    primary_changed = pyqtSignal(int)  # Emitted when primary monitor is changed
+
+    SNAP_THRESHOLD = 20  # Pixels for snap-to-edge
 
     def __init__(self, parent=None):
         super().__init__(parent)
         self.config_data = None
+        self.monitors = []  # Parsed monitor data
         self.setMinimumSize(400, 300)
         self.setFrameShape(QFrame.Shape.Box)
         self.setLineWidth(1)
 
+        # Edit mode state
+        self.edit_mode = False
+        self.dragging = False
+        self.dragged_monitor_idx = -1
+        self.drag_start_pos = None
+        self.drag_start_monitor_pos = None
+        self.hovered_monitor_idx = -1
+
+        # Scale and offset for coordinate transformation
+        self.scale = 1.0
+        self.offset_x = 0
+        self.offset_y = 0
+
+        # Enable mouse tracking for hover effects
+        self.setMouseTracking(True)
+
+    def set_edit_mode(self, enabled):
+        """Enable or disable edit mode"""
+        self.edit_mode = enabled
+        if enabled:
+            self.setCursor(QCursor(Qt.CursorShape.OpenHandCursor))
+        else:
+            self.setCursor(QCursor(Qt.CursorShape.ArrowCursor))
+        self.update()
+
     def set_config(self, config_data):
         """Set the display configuration to preview"""
         self.config_data = config_data
+        self._parse_monitors()
         self.update()
 
     def clear(self):
         """Clear the preview"""
         self.config_data = None
+        self.monitors = []
         self.update()
 
-    def paintEvent(self, event):
+    def get_modified_config(self):
+        """Get the modified configuration after edit"""
+        if not self.config_data:
+            return None
+
+        # Deep copy the config
+        import copy
+        modified = copy.deepcopy(self.config_data)
+        config = modified.get('config', {})
+        modes = config.get('modes', [])
+
+        # Update positions from monitors list
+        for monitor in self.monitors:
+            source_idx = monitor.get('source_mode_idx')
+            if source_idx is not None and source_idx < len(modes):
+                mode = modes[source_idx]
+                if mode.get('infoType') == 1:
+                    mode['sourceMode']['position']['x'] = monitor['x']
+                    mode['sourceMode']['position']['y'] = monitor['y']
+
+        return modified
+
+    def _parse_monitors(self):
+        """Parse config data into monitor list"""
+        self.monitors = []
         if not self.config_data:
             return
 
-        painter = QPainter(self)
-        painter.setRenderHint(QPainter.RenderHint.Antialiasing)
-
-        # Get display config
         config = self.config_data.get('config', {})
         paths = config.get('paths', [])
         modes = config.get('modes', [])
@@ -51,148 +105,303 @@ class MonitorPreviewWidget(QFrame):
         if not paths or not modes:
             return
 
-        # Find monitor bounds
-        monitors = []
         for path_idx, path in enumerate(paths):
             if not path.get('targetInfo', {}).get('targetAvailable'):
                 continue
 
             source_idx = path.get('sourceInfo', {}).get('modeInfoIdx')
-            target_idx = path.get('targetInfo', {}).get('modeInfoIdx')
-
             if source_idx is None or source_idx >= len(modes):
                 continue
 
             mode = modes[source_idx]
-            if mode.get('infoType') != 1:  # Source mode
+            if mode.get('infoType') != 1:
                 continue
 
             source_mode = mode.get('sourceMode', {})
             pos = source_mode.get('position', {})
-            width = source_mode.get('width', 0)
-            height = source_mode.get('height', 0)
 
-            # Get target info for display ID
-            target_info = path.get('targetInfo', {})
-            target_id = target_info.get('id', 0)
-
-            # Check if this is the primary monitor
-            # DISPLAYCONFIG_PATH_ACTIVE (0x1) flag indicates primary/active path
-            is_primary = bool(path.get('flags', 0) & 0x1)
-
-            monitors.append({
+            self.monitors.append({
                 'x': pos.get('x', 0),
                 'y': pos.get('y', 0),
-                'width': width,
-                'height': height,
-                'active': True,
-                'id': target_id,
+                'width': source_mode.get('width', 0),
+                'height': source_mode.get('height', 0),
+                'id': path.get('targetInfo', {}).get('id', 0),
                 'source_id': path.get('sourceInfo', {}).get('id', 0),
-                'is_primary': is_primary
+                'is_primary': bool(path.get('flags', 0) & 0x1),
+                'path_idx': path_idx,
+                'source_mode_idx': source_idx
             })
 
-        if not monitors:
+        # Assign display numbers
+        monitors_sorted = sorted(enumerate(self.monitors), key=lambda x: (x[1]['y'], x[1]['x']))
+        for display_num, (idx, _) in enumerate(monitors_sorted, start=1):
+            self.monitors[idx]['display_number'] = display_num
+
+    def _calculate_transform(self):
+        """Calculate scale and offset for coordinate transformation"""
+        if not self.monitors:
             return
 
-        # Sort monitors by position (left to right, top to bottom) and assign display numbers
-        monitors_sorted = sorted(monitors, key=lambda m: (m['y'], m['x']))
-        for idx, monitor in enumerate(monitors_sorted, start=1):
-            monitor['display_number'] = idx
-
-        # Calculate bounds
-        min_x = min(m['x'] for m in monitors)
-        min_y = min(m['y'] for m in monitors)
-        max_x = max(m['x'] + m['width'] for m in monitors)
-        max_y = max(m['y'] + m['height'] for m in monitors)
+        min_x = min(m['x'] for m in self.monitors)
+        min_y = min(m['y'] for m in self.monitors)
+        max_x = max(m['x'] + m['width'] for m in self.monitors)
+        max_y = max(m['y'] + m['height'] for m in self.monitors)
 
         total_width = max_x - min_x
         total_height = max_y - min_y
 
-        # Calculate scale to fit in widget
         padding = 40
         scale_x = (self.width() - padding * 2) / total_width if total_width > 0 else 1
         scale_y = (self.height() - padding * 2) / total_height if total_height > 0 else 1
-        scale = min(scale_x, scale_y, 1.0)  # Don't scale up
+        self.scale = min(scale_x, scale_y, 0.15)  # Cap scale for large resolutions
 
-        # Center the preview
-        offset_x = (self.width() - total_width * scale) / 2 - min_x * scale
-        offset_y = (self.height() - total_height * scale) / 2 - min_y * scale
+        self.offset_x = (self.width() - total_width * self.scale) / 2 - min_x * self.scale
+        self.offset_y = (self.height() - total_height * self.scale) / 2 - min_y * self.scale
+
+    def _monitor_to_screen(self, x, y):
+        """Convert monitor coordinates to screen coordinates"""
+        return (self.offset_x + x * self.scale, self.offset_y + y * self.scale)
+
+    def _screen_to_monitor(self, sx, sy):
+        """Convert screen coordinates to monitor coordinates"""
+        return (int((sx - self.offset_x) / self.scale), int((sy - self.offset_y) / self.scale))
+
+    def _get_monitor_rect(self, monitor):
+        """Get screen rectangle for a monitor"""
+        x, y = self._monitor_to_screen(monitor['x'], monitor['y'])
+        w = monitor['width'] * self.scale
+        h = monitor['height'] * self.scale
+        return QRectF(x, y, w, h)
+
+    def _get_monitor_at(self, pos):
+        """Get monitor index at screen position, -1 if none"""
+        for i, monitor in enumerate(self.monitors):
+            rect = self._get_monitor_rect(monitor)
+            if rect.contains(pos.x(), pos.y()):
+                return i
+        return -1
+
+    def _snap_to_edges(self, monitor_idx, new_x, new_y):
+        """Snap monitor to edges of other monitors"""
+        monitor = self.monitors[monitor_idx]
+        w, h = monitor['width'], monitor['height']
+
+        # Edges of the dragged monitor
+        left, right = new_x, new_x + w
+        top, bottom = new_y, new_y + h
+
+        snap_x, snap_y = new_x, new_y
+
+        for i, other in enumerate(self.monitors):
+            if i == monitor_idx:
+                continue
+
+            o_left, o_right = other['x'], other['x'] + other['width']
+            o_top, o_bottom = other['y'], other['y'] + other['height']
+
+            # Horizontal snapping
+            # Right edge to left edge
+            if abs(right - o_left) < self.SNAP_THRESHOLD / self.scale:
+                snap_x = o_left - w
+            # Left edge to right edge
+            elif abs(left - o_right) < self.SNAP_THRESHOLD / self.scale:
+                snap_x = o_right
+            # Left edge to left edge
+            elif abs(left - o_left) < self.SNAP_THRESHOLD / self.scale:
+                snap_x = o_left
+            # Right edge to right edge
+            elif abs(right - o_right) < self.SNAP_THRESHOLD / self.scale:
+                snap_x = o_right - w
+
+            # Vertical snapping
+            # Bottom edge to top edge
+            if abs(bottom - o_top) < self.SNAP_THRESHOLD / self.scale:
+                snap_y = o_top - h
+            # Top edge to bottom edge
+            elif abs(top - o_bottom) < self.SNAP_THRESHOLD / self.scale:
+                snap_y = o_bottom
+            # Top edge to top edge
+            elif abs(top - o_top) < self.SNAP_THRESHOLD / self.scale:
+                snap_y = o_top
+            # Bottom edge to bottom edge
+            elif abs(bottom - o_bottom) < self.SNAP_THRESHOLD / self.scale:
+                snap_y = o_bottom - h
+
+        return int(snap_x), int(snap_y)
+
+    def mousePressEvent(self, event):
+        if not self.edit_mode or event.button() != Qt.MouseButton.LeftButton:
+            return super().mousePressEvent(event)
+
+        idx = self._get_monitor_at(event.pos())
+        if idx >= 0:
+            self.dragging = True
+            self.dragged_monitor_idx = idx
+            self.drag_start_pos = event.pos()
+            self.drag_start_monitor_pos = (self.monitors[idx]['x'], self.monitors[idx]['y'])
+            self.setCursor(QCursor(Qt.CursorShape.ClosedHandCursor))
+
+    def mouseMoveEvent(self, event):
+        if not self.edit_mode:
+            return super().mouseMoveEvent(event)
+
+        if self.dragging and self.dragged_monitor_idx >= 0:
+            # Calculate delta in screen coordinates
+            delta = event.pos() - self.drag_start_pos
+
+            # Convert to monitor coordinates
+            delta_mx = int(delta.x() / self.scale)
+            delta_my = int(delta.y() / self.scale)
+
+            # New position
+            new_x = self.drag_start_monitor_pos[0] + delta_mx
+            new_y = self.drag_start_monitor_pos[1] + delta_my
+
+            # Snap to edges
+            new_x, new_y = self._snap_to_edges(self.dragged_monitor_idx, new_x, new_y)
+
+            # Update monitor position
+            self.monitors[self.dragged_monitor_idx]['x'] = new_x
+            self.monitors[self.dragged_monitor_idx]['y'] = new_y
+
+            self.update()
+        else:
+            # Hover effect
+            idx = self._get_monitor_at(event.pos())
+            if idx != self.hovered_monitor_idx:
+                self.hovered_monitor_idx = idx
+                self.update()
+
+    def mouseReleaseEvent(self, event):
+        if not self.edit_mode or event.button() != Qt.MouseButton.LeftButton:
+            return super().mouseReleaseEvent(event)
+
+        if self.dragging:
+            self.dragging = False
+            self.dragged_monitor_idx = -1
+            self.setCursor(QCursor(Qt.CursorShape.OpenHandCursor))
+            self.config_changed.emit(self.get_modified_config())
+
+    def mouseDoubleClickEvent(self, event):
+        """Double click to set primary monitor"""
+        if not self.edit_mode:
+            return super().mouseDoubleClickEvent(event)
+
+        idx = self._get_monitor_at(event.pos())
+        if idx >= 0:
+            # Set this monitor as primary
+            for i, monitor in enumerate(self.monitors):
+                monitor['is_primary'] = (i == idx)
+            self.primary_changed.emit(idx)
+            self.update()
+
+    def leaveEvent(self, event):
+        self.hovered_monitor_idx = -1
+        self.update()
+        super().leaveEvent(event)
+
+    def paintEvent(self, event):
+        painter = QPainter(self)
+        painter.setRenderHint(QPainter.RenderHint.Antialiasing)
+
+        is_dark_mode = self.palette().color(self.backgroundRole()).lightness() < 128
+
+        # Draw background hint in edit mode
+        if self.edit_mode and not self.monitors:
+            painter.setPen(QColor('#8b949e' if is_dark_mode else '#57606a'))
+            painter.drawText(self.rect(), Qt.AlignmentFlag.AlignCenter, "No monitors to edit")
+            return
+
+        if not self.monitors:
+            return
+
+        self._calculate_transform()
 
         # Group monitors by position (to detect duplicates)
         position_groups = {}
-        for monitor in monitors:
+        for i, monitor in enumerate(self.monitors):
             pos_key = (monitor['x'], monitor['y'], monitor['width'], monitor['height'])
             if pos_key not in position_groups:
                 position_groups[pos_key] = []
-            position_groups[pos_key].append(monitor)
+            position_groups[pos_key].append(i)
 
         # Draw monitors
-        for i, monitor in enumerate(monitors):
-            x = offset_x + monitor['x'] * scale
-            y = offset_y + monitor['y'] * scale
-            w = monitor['width'] * scale
-            h = monitor['height'] * scale
+        for i, monitor in enumerate(self.monitors):
+            rect = self._get_monitor_rect(monitor)
+            x, y, w, h = rect.x(), rect.y(), rect.width(), rect.height()
 
-            # Check if duplicate
             pos_key = (monitor['x'], monitor['y'], monitor['width'], monitor['height'])
             is_duplicate = len(position_groups[pos_key]) > 1
+            is_hovered = (i == self.hovered_monitor_idx) and self.edit_mode
+            is_dragging = (i == self.dragged_monitor_idx) and self.dragging
 
-            # Monitor background - Windows 11 Fluent Design
-            is_dark_mode = self.palette().color(self.backgroundRole()).lightness() < 128
+            # Monitor background color
             if is_duplicate:
-                # Red for duplicates (Windows 11 red)
-                painter.setBrush(QColor('#c42b1c' if is_dark_mode else '#d13438'))
+                bg_color = QColor('#c42b1c' if is_dark_mode else '#d13438')
+            elif is_hovered or is_dragging:
+                bg_color = QColor('#3b8eea' if is_dark_mode else '#106ebe')
             else:
-                # Blue accent for monitors (Windows 11 blue)
-                painter.setBrush(QColor('#60cdff' if is_dark_mode else '#0078d4'))
+                bg_color = QColor('#60cdff' if is_dark_mode else '#0078d4')
 
-            # Subtle border
-            border_color = QColor(255, 255, 255, 20) if is_dark_mode else QColor(0, 0, 0, 15)
-            painter.setPen(QPen(border_color, 1))
-            painter.drawRoundedRect(int(x), int(y), int(w), int(h), 6, 6)
+            painter.setBrush(bg_color)
 
-            # Monitor info with contrasting text
+            # Border
+            if is_hovered or is_dragging:
+                border_color = QColor('#ffffff' if is_dark_mode else '#000000')
+                painter.setPen(QPen(border_color, 2))
+            else:
+                border_color = QColor(255, 255, 255, 20) if is_dark_mode else QColor(0, 0, 0, 15)
+                painter.setPen(QPen(border_color, 1))
+
+            painter.drawRoundedRect(rect, 6, 6)
+
+            # Text
             painter.setPen(QColor('#ffffff'))
             font = QFont("Segoe UI Variable", -1, QFont.Weight.Bold)
-            if font.family() != "Segoe UI Variable":  # Fallback if Variable not available
+            if font.family() != "Segoe UI Variable":
                 font = QFont("Segoe UI", -1, QFont.Weight.Bold)
             font.setPixelSize(max(10, int(h * 0.12)))
             painter.setFont(font)
 
-            # Display number at top
+            # Display number
             if is_duplicate:
-                # Show all display numbers in duplicate group
-                display_nums = sorted(set(m['display_number'] for m in position_groups[pos_key]))
+                display_nums = sorted(set(self.monitors[j]['display_number'] for j in position_groups[pos_key]))
                 id_text = f"Monitor {', '.join(map(str, display_nums))}"
             else:
                 id_text = f"Monitor {monitor['display_number']}"
 
-            # Add primary indicator
             if monitor.get('is_primary', False):
                 id_text = f"★ {id_text}"
 
-            painter.drawText(int(x), int(y + h * 0.2), int(w), int(h * 0.3),
-                           Qt.AlignmentFlag.AlignCenter, id_text)
+            painter.drawText(QRectF(x, y + h * 0.15, w, h * 0.3), Qt.AlignmentFlag.AlignCenter, id_text)
 
-            # Resolution at bottom
-            font = QFont("Segoe UI Variable", -1, QFont.Weight.Normal)
-            if font.family() != "Segoe UI Variable":
-                font = QFont("Segoe UI", -1, QFont.Weight.Normal)
+            # Resolution
+            font.setWeight(QFont.Weight.Normal)
             font.setPixelSize(max(8, int(h * 0.1)))
             painter.setFont(font)
-            painter.drawText(int(x), int(y + h * 0.5), int(w), int(h * 0.5),
-                           Qt.AlignmentFlag.AlignCenter,
+            painter.drawText(QRectF(x, y + h * 0.45, w, h * 0.25), Qt.AlignmentFlag.AlignCenter,
                            f"{monitor['width']}×{monitor['height']}")
 
+            # Duplicate label
             if is_duplicate:
-                # "DUPLICATE" label
-                font = QFont("Segoe UI Variable", -1, QFont.Weight.Bold)
-                if font.family() != "Segoe UI Variable":
-                    font = QFont("Segoe UI", -1, QFont.Weight.Bold)
+                font.setWeight(QFont.Weight.Bold)
                 font.setPixelSize(max(7, int(h * 0.08)))
                 painter.setFont(font)
-                painter.drawText(int(x), int(y + h * 0.7), int(w), int(h * 0.3),
-                               Qt.AlignmentFlag.AlignCenter, "DUPLICATE")
+                painter.drawText(QRectF(x, y + h * 0.7, w, h * 0.2), Qt.AlignmentFlag.AlignCenter, "DUPLICATE")
+
+            # Edit mode hint
+            if self.edit_mode and is_hovered and not is_dragging:
+                hint_font = QFont("Segoe UI", 9)
+                painter.setFont(hint_font)
+                painter.setPen(QColor(255, 255, 255, 200))
+                painter.drawText(QRectF(x, y + h - 20, w, 20), Qt.AlignmentFlag.AlignCenter, "Drag to move • Double-click for primary")
+
+        # Edit mode indicator
+        if self.edit_mode:
+            painter.setPen(QColor('#1f6feb' if is_dark_mode else '#0969da'))
+            font = QFont("Segoe UI", 10, QFont.Weight.Bold)
+            painter.setFont(font)
+            painter.drawText(10, 20, "EDIT MODE")
 
 
 class MainWindow(QMainWindow):
@@ -802,13 +1011,56 @@ class MainWindow(QMainWindow):
         right_layout.setContentsMargins(8, 0, 0, 0)
         right_layout.setSpacing(12)
 
+        # Preview header with Edit Mode toggle
+        preview_header = QHBoxLayout()
         preview_title = QLabel("Preview")
         preview_title.setObjectName("section")
-        right_layout.addWidget(preview_title)
+        preview_header.addWidget(preview_title)
+        preview_header.addStretch()
+
+        self.edit_mode_btn = QPushButton("Edit Layout")
+        self.edit_mode_btn.setCheckable(True)
+        self.edit_mode_btn.setMinimumHeight(32)
+        self.edit_mode_btn.setToolTip("Enable edit mode to drag monitors and change layout")
+        self.edit_mode_btn.clicked.connect(self.toggle_edit_mode)
+        preview_header.addWidget(self.edit_mode_btn)
+
+        right_layout.addLayout(preview_header)
 
         # Monitor preview
         self.monitor_preview = MonitorPreviewWidget()
+        self.monitor_preview.config_changed.connect(self.on_preview_config_changed)
+        self.monitor_preview.primary_changed.connect(self.on_preview_primary_changed)
         right_layout.addWidget(self.monitor_preview, stretch=1)
+
+        # Edit mode action buttons (hidden by default)
+        self.edit_actions_widget = QWidget()
+        edit_actions_layout = QHBoxLayout(self.edit_actions_widget)
+        edit_actions_layout.setContentsMargins(0, 8, 0, 0)
+        edit_actions_layout.setSpacing(8)
+
+        self.apply_layout_btn = QPushButton("Apply Layout")
+        self.apply_layout_btn.setObjectName("primary")
+        self.apply_layout_btn.setMinimumHeight(36)
+        self.apply_layout_btn.setToolTip("Apply the modified layout to your displays")
+        self.apply_layout_btn.clicked.connect(self.apply_edited_layout)
+        edit_actions_layout.addWidget(self.apply_layout_btn)
+
+        self.save_as_preset_btn = QPushButton("Save as New Preset")
+        self.save_as_preset_btn.setMinimumHeight(36)
+        self.save_as_preset_btn.setToolTip("Save the modified layout as a new preset")
+        self.save_as_preset_btn.clicked.connect(self.save_edited_as_preset)
+        edit_actions_layout.addWidget(self.save_as_preset_btn)
+
+        self.reset_layout_btn = QPushButton("Reset")
+        self.reset_layout_btn.setMinimumHeight(36)
+        self.reset_layout_btn.setToolTip("Reset layout to original positions")
+        self.reset_layout_btn.clicked.connect(self.reset_edited_layout)
+        edit_actions_layout.addWidget(self.reset_layout_btn)
+
+        edit_actions_layout.addStretch()
+        self.edit_actions_widget.hide()
+        right_layout.addWidget(self.edit_actions_widget)
 
         # Preset details section
         details_section = QWidget()
@@ -1057,6 +1309,95 @@ To contribute:
                 self.hotkey_input.clear()
         except Exception as e:
             print(f"Error loading preset preview: {e}")
+
+        # Exit edit mode when switching presets
+        if self.edit_mode_btn.isChecked():
+            self.edit_mode_btn.setChecked(False)
+            self.toggle_edit_mode()
+
+    def toggle_edit_mode(self):
+        """Toggle edit mode for monitor preview"""
+        enabled = self.edit_mode_btn.isChecked()
+        self.monitor_preview.set_edit_mode(enabled)
+        self.edit_actions_widget.setVisible(enabled)
+
+        if enabled:
+            self.edit_mode_btn.setText("Exit Edit")
+            # Store original config for reset
+            self._original_config = self.monitor_preview.config_data
+        else:
+            self.edit_mode_btn.setText("Edit Layout")
+
+    def on_preview_config_changed(self, modified_config):
+        """Called when monitors are moved in edit mode"""
+        # Config has been modified, enable apply button
+        pass
+
+    def on_preview_primary_changed(self, monitor_idx):
+        """Called when primary monitor is changed in edit mode"""
+        pass
+
+    def apply_edited_layout(self):
+        """Apply the edited layout to displays"""
+        modified_config = self.monitor_preview.get_modified_config()
+        if not modified_config:
+            return
+
+        try:
+            result = self.display.apply(modified_config['config'])
+            if result == 0:
+                if self.settings.notify_preset_applied:
+                    QMessageBox.information(
+                        self,
+                        "Layout Applied",
+                        "The modified display layout has been applied successfully."
+                    )
+                # Exit edit mode
+                self.edit_mode_btn.setChecked(False)
+                self.toggle_edit_mode()
+            else:
+                if self.settings.show_error_messages:
+                    QMessageBox.critical(
+                        self,
+                        "Failed to Apply Layout",
+                        f"Could not apply the modified layout.\nError code: {result}"
+                    )
+        except Exception as e:
+            if self.settings.show_error_messages:
+                QMessageBox.critical(self, "Error", f"Failed to apply layout:\n{e}")
+
+    def save_edited_as_preset(self):
+        """Save the edited layout as a new preset"""
+        modified_config = self.monitor_preview.get_modified_config()
+        if not modified_config:
+            return
+
+        name, ok = QInputDialog.getText(
+            self,
+            "Save Modified Layout",
+            "Enter a name for this preset:"
+        )
+        if ok and name and name.strip():
+            try:
+                self.presets.save(name.strip(), modified_config['config'])
+                if self.settings.notify_preset_saved:
+                    QMessageBox.information(
+                        self,
+                        "Preset Saved",
+                        f"Layout saved as preset '{name}'."
+                    )
+                self.refresh_preset_list()
+                # Exit edit mode
+                self.edit_mode_btn.setChecked(False)
+                self.toggle_edit_mode()
+            except Exception as e:
+                if self.settings.show_error_messages:
+                    QMessageBox.critical(self, "Error", f"Failed to save preset:\n{e}")
+
+    def reset_edited_layout(self):
+        """Reset the layout to original positions"""
+        if hasattr(self, '_original_config') and self._original_config:
+            self.monitor_preview.set_config(self._original_config)
 
     def save_hotkey(self):
         """Save hotkey for selected preset"""
