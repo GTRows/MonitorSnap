@@ -1454,11 +1454,7 @@ To contribute:
         theme_layout.setSpacing(12)
 
         self.theme_buttons = []
-        theme_options = [
-            ("system", "System", "Follow your Windows theme settings"),
-            ("dark", "Dark", "Dark background with light text"),
-            ("light", "Light", "Light background with dark text"),
-        ]
+        theme_options = [("system", "System"), ("dark", "Dark"), ("light", "Light")]
 
         # Get theme colors for styling
         is_dark = self.settings.dark_mode
@@ -1469,7 +1465,6 @@ To contribute:
             card_border = "#30363d"
             card_border_selected = "#1f6feb"
             text_primary = "#c9d1d9"
-            text_secondary = "#8b949e"
         else:
             card_bg = "#f6f8fa"
             card_bg_hover = "#f3f4f6"
@@ -1477,29 +1472,22 @@ To contribute:
             card_border = "#d0d7de"
             card_border_selected = "#0969da"
             text_primary = "#24292f"
-            text_secondary = "#57606a"
 
-        for mode, label, description in theme_options:
+        for mode, label in theme_options:
             btn = QPushButton()
             btn.setCheckable(True)
-            btn.setMinimumHeight(80)
-            btn.setMinimumWidth(140)
+            btn.setMinimumHeight(44)
+            btn.setMinimumWidth(100)
 
             # Create layout for button content
             btn_layout = QVBoxLayout(btn)
-            btn_layout.setContentsMargins(16, 12, 16, 12)
-            btn_layout.setSpacing(4)
+            btn_layout.setContentsMargins(16, 10, 16, 10)
 
             title_label = QLabel(label)
+            title_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
             title_label.setStyleSheet(f"font-weight: 600; font-size: 14px; color: {text_primary}; background: transparent;")
 
-            desc_label = QLabel(description)
-            desc_label.setWordWrap(True)
-            desc_label.setStyleSheet(f"font-size: 11px; color: {text_secondary}; background: transparent;")
-
             btn_layout.addWidget(title_label)
-            btn_layout.addWidget(desc_label)
-            btn_layout.addStretch()
 
             # Style the button
             btn.setStyleSheet(f"""
@@ -1507,7 +1495,6 @@ To contribute:
                     background-color: {card_bg};
                     border: 1px solid {card_border};
                     border-radius: 8px;
-                    text-align: left;
                 }}
                 QPushButton:hover {{
                     background-color: {card_bg_hover};
