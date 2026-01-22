@@ -71,24 +71,71 @@ class MonitorPreviewWidget(QFrame):
         self.update()
 
     def get_modified_config(self):
-        """Get the modified configuration after edit"""
+        """Get the modified configuration after edit, handling duplicate→extend conversion"""
         if not self.config_data:
             return None
 
-        # Deep copy the config
         import copy
         modified = copy.deepcopy(self.config_data)
         config = modified.get('config', {})
+        paths = config.get('paths', [])
         modes = config.get('modes', [])
 
-        # Update positions from monitors list
+        # Group monitors by their source_mode_idx to detect shared sources (duplicates)
+        source_idx_to_monitors = {}
         for monitor in self.monitors:
             source_idx = monitor.get('source_mode_idx')
-            if source_idx is not None and source_idx < len(modes):
-                mode = modes[source_idx]
-                if mode.get('infoType') == 1:
-                    mode['sourceMode']['position']['x'] = monitor['x']
-                    mode['sourceMode']['position']['y'] = monitor['y']
+            if source_idx is not None:
+                if source_idx not in source_idx_to_monitors:
+                    source_idx_to_monitors[source_idx] = []
+                source_idx_to_monitors[source_idx].append(monitor)
+
+        # Process each group
+        for source_idx, group in source_idx_to_monitors.items():
+            if source_idx >= len(modes):
+                continue
+
+            mode = modes[source_idx]
+            if mode.get('infoType') != 1:
+                continue
+
+            # Check if monitors in this group have different positions (need to split)
+            positions = set((m['x'], m['y']) for m in group)
+
+            if len(positions) == 1:
+                # All same position - just update the shared source mode
+                first_monitor = group[0]
+                mode['sourceMode']['position']['x'] = first_monitor['x']
+                mode['sourceMode']['position']['y'] = first_monitor['y']
+            else:
+                # Different positions - need to create separate source modes (extend mode)
+                # First monitor keeps the original source mode
+                first_monitor = group[0]
+                mode['sourceMode']['position']['x'] = first_monitor['x']
+                mode['sourceMode']['position']['y'] = first_monitor['y']
+
+                # Other monitors get new source modes
+                for monitor in group[1:]:
+                    # Create new source mode (copy of original with new position)
+                    new_mode = copy.deepcopy(mode)
+                    new_mode['sourceMode']['position']['x'] = monitor['x']
+                    new_mode['sourceMode']['position']['y'] = monitor['y']
+
+                    # Find a new unique id for this source mode
+                    existing_ids = set(m.get('id', 0) for m in modes if m.get('infoType') == 1)
+                    new_id = max(existing_ids) + 1 if existing_ids else 1
+                    new_mode['id'] = new_id
+
+                    # Add new mode to the list
+                    new_mode_idx = len(modes)
+                    modes.append(new_mode)
+
+                    # Update the path to use the new source mode
+                    path_idx = monitor.get('path_idx')
+                    if path_idx is not None and path_idx < len(paths):
+                        paths[path_idx]['sourceInfo']['modeInfoIdx'] = new_mode_idx
+                        # Also update source id to make it a separate source
+                        paths[path_idx]['sourceInfo']['id'] = new_id
 
         return modified
 
