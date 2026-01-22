@@ -181,8 +181,39 @@ class MonitorPreviewWidget(QFrame):
                 return i
         return -1
 
+    def _check_overlap(self, monitor_idx, x, y, exclude_exact_match=True):
+        """Check if monitor at position overlaps with others (partial overlap, not exact match)"""
+        monitor = self.monitors[monitor_idx]
+        w, h = monitor['width'], monitor['height']
+
+        for i, other in enumerate(self.monitors):
+            if i == monitor_idx:
+                continue
+
+            # Check for exact position match (duplicate/clone mode)
+            if exclude_exact_match and x == other['x'] and y == other['y']:
+                continue  # Exact match is allowed (duplicate mode)
+
+            # Check for partial overlap
+            o_left, o_right = other['x'], other['x'] + other['width']
+            o_top, o_bottom = other['y'], other['y'] + other['height']
+
+            left, right = x, x + w
+            top, bottom = y, y + h
+
+            # If rectangles overlap (but not exact match)
+            h_overlap = left < o_right and right > o_left
+            v_overlap = top < o_bottom and bottom > o_top
+
+            if h_overlap and v_overlap:
+                # Check if it's not an exact position match
+                if not (x == other['x'] and y == other['y']):
+                    return True
+
+        return False
+
     def _snap_to_edges(self, monitor_idx, new_x, new_y):
-        """Snap monitor to edges of other monitors"""
+        """Snap monitor to edges of other monitors, prevent partial overlap"""
         monitor = self.monitors[monitor_idx]
         w, h = monitor['width'], monitor['height']
 
@@ -191,6 +222,7 @@ class MonitorPreviewWidget(QFrame):
         top, bottom = new_y, new_y + h
 
         snap_x, snap_y = new_x, new_y
+        best_snap_dist = float('inf')
 
         for i, other in enumerate(self.monitors):
             if i == monitor_idx:
@@ -199,33 +231,51 @@ class MonitorPreviewWidget(QFrame):
             o_left, o_right = other['x'], other['x'] + other['width']
             o_top, o_bottom = other['y'], other['y'] + other['height']
 
-            # Horizontal snapping
-            # Right edge to left edge
-            if abs(right - o_left) < self.SNAP_THRESHOLD / self.scale:
-                snap_x = o_left - w
+            threshold = self.SNAP_THRESHOLD / self.scale
+
+            # Snap to make duplicate (exact same position)
+            dist_to_duplicate = abs(new_x - other['x']) + abs(new_y - other['y'])
+            if dist_to_duplicate < threshold * 2:
+                return other['x'], other['y']  # Snap to duplicate position
+
+            # Horizontal snapping (right edge to left edge)
+            if abs(right - o_left) < threshold:
+                candidate_x = o_left - w
+                if not self._check_overlap(monitor_idx, candidate_x, snap_y):
+                    snap_x = candidate_x
             # Left edge to right edge
-            elif abs(left - o_right) < self.SNAP_THRESHOLD / self.scale:
-                snap_x = o_right
-            # Left edge to left edge
-            elif abs(left - o_left) < self.SNAP_THRESHOLD / self.scale:
+            elif abs(left - o_right) < threshold:
+                candidate_x = o_right
+                if not self._check_overlap(monitor_idx, candidate_x, snap_y):
+                    snap_x = candidate_x
+
+            # Vertical snapping (bottom to top)
+            if abs(bottom - o_top) < threshold:
+                candidate_y = o_top - h
+                if not self._check_overlap(monitor_idx, snap_x, candidate_y):
+                    snap_y = candidate_y
+            # Top to bottom
+            elif abs(top - o_bottom) < threshold:
+                candidate_y = o_bottom
+                if not self._check_overlap(monitor_idx, snap_x, candidate_y):
+                    snap_y = candidate_y
+
+            # Align edges (top-to-top, left-to-left, etc.)
+            if abs(top - o_top) < threshold:
+                snap_y = o_top
+            elif abs(bottom - o_bottom) < threshold:
+                snap_y = o_bottom - h
+            if abs(left - o_left) < threshold:
                 snap_x = o_left
-            # Right edge to right edge
-            elif abs(right - o_right) < self.SNAP_THRESHOLD / self.scale:
+            elif abs(right - o_right) < threshold:
                 snap_x = o_right - w
 
-            # Vertical snapping
-            # Bottom edge to top edge
-            if abs(bottom - o_top) < self.SNAP_THRESHOLD / self.scale:
-                snap_y = o_top - h
-            # Top edge to bottom edge
-            elif abs(top - o_bottom) < self.SNAP_THRESHOLD / self.scale:
-                snap_y = o_bottom
-            # Top edge to top edge
-            elif abs(top - o_top) < self.SNAP_THRESHOLD / self.scale:
-                snap_y = o_top
-            # Bottom edge to bottom edge
-            elif abs(bottom - o_bottom) < self.SNAP_THRESHOLD / self.scale:
-                snap_y = o_bottom - h
+        # Final overlap check - if still overlapping, revert to original
+        if self._check_overlap(monitor_idx, snap_x, snap_y):
+            # Try to find a non-overlapping position
+            original_x, original_y = self.drag_start_monitor_pos
+            if not self._check_overlap(monitor_idx, original_x, original_y):
+                return int(original_x), int(original_y)
 
         return int(snap_x), int(snap_y)
 
