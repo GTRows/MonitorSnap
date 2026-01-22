@@ -39,6 +39,7 @@ setup(
     entry_points={
         "console_scripts": [
             "display-presets=display_presets.__main__:main",
+            "monitorsnap=display_presets.__main__:main",
         ],
     },
     include_package_data=True,
