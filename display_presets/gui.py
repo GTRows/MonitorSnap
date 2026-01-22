@@ -1093,6 +1093,12 @@ class MainWindow(QMainWindow):
         rename_btn.clicked.connect(self.rename_selected)
         btn_layout.addWidget(rename_btn)
 
+        duplicate_btn = QPushButton("Duplicate")
+        duplicate_btn.setMinimumHeight(32)
+        duplicate_btn.setToolTip("Create a copy of the selected preset")
+        duplicate_btn.clicked.connect(self.duplicate_selected)
+        btn_layout.addWidget(duplicate_btn)
+
         delete_btn = QPushButton("Delete")
         delete_btn.setObjectName("danger")
         delete_btn.setMinimumHeight(32)
@@ -1148,6 +1154,12 @@ class MainWindow(QMainWindow):
         self.save_as_preset_btn.setToolTip("Save the modified layout as a new preset")
         self.save_as_preset_btn.clicked.connect(self.save_edited_as_preset)
         edit_actions_layout.addWidget(self.save_as_preset_btn)
+
+        self.test_layout_btn = QPushButton("Test")
+        self.test_layout_btn.setMinimumHeight(36)
+        self.test_layout_btn.setToolTip("Apply this layout temporarily to test it (doesn't save)")
+        self.test_layout_btn.clicked.connect(self.test_edited_layout)
+        edit_actions_layout.addWidget(self.test_layout_btn)
 
         self.reset_layout_btn = QPushButton("Reset")
         self.reset_layout_btn.setMinimumHeight(36)
@@ -1498,6 +1510,32 @@ To contribute:
                 if self.settings.show_error_messages:
                     QMessageBox.critical(self, "Error", f"Failed to save preset:\n{e}")
 
+    def test_edited_layout(self):
+        """Apply the edited layout temporarily to test it (doesn't save)"""
+        modified_config = self.monitor_preview.get_modified_config()
+        if not modified_config:
+            return
+
+        try:
+            result = self.display.apply(modified_config['config'])
+            if result == 0:
+                QMessageBox.information(
+                    self,
+                    "Test Layout Applied",
+                    "The layout has been applied for testing.\n\n"
+                    "Use 'Save Layout' to keep these changes, or 'Reset' to revert."
+                )
+            else:
+                if self.settings.show_error_messages:
+                    QMessageBox.critical(
+                        self,
+                        "Test Failed",
+                        f"Could not apply the layout.\nError code: {result}"
+                    )
+        except Exception as e:
+            if self.settings.show_error_messages:
+                QMessageBox.critical(self, "Error", f"Failed to test layout:\n{e}")
+
     def reset_edited_layout(self):
         """Reset the layout to original positions"""
         if hasattr(self, '_original_config') and self._original_config:
@@ -1740,6 +1778,56 @@ To contribute:
             except Exception as e:
                 if self.settings.show_error_messages:
                     QMessageBox.critical(self, "Error", f"Failed to delete preset:\n{e}")
+
+    def duplicate_selected(self):
+        """Create a copy of the selected preset"""
+        current = self.preset_list.currentItem()
+        if not current:
+            QMessageBox.warning(
+                self,
+                "No Preset Selected",
+                "Please select a preset from the list to duplicate it."
+            )
+            return
+
+        original_name = current.text()
+
+        # Generate default new name
+        copy_num = 1
+        new_name = f"{original_name} (Copy)"
+        existing = self.presets.list_names()
+        while new_name in existing:
+            copy_num += 1
+            new_name = f"{original_name} (Copy {copy_num})"
+
+        # Ask for new name
+        name, ok = QInputDialog.getText(
+            self,
+            "Duplicate Preset",
+            f"Enter a name for the copy of '{original_name}':",
+            text=new_name
+        )
+
+        if ok and name and name.strip():
+            try:
+                # Load original preset
+                data = self.presets.load(original_name)
+                # Save as new preset (without hotkey - user should set new hotkey)
+                self.presets.save(name.strip(), data['config'])
+                if self.settings.notify_preset_saved:
+                    QMessageBox.information(
+                        self,
+                        "Preset Duplicated",
+                        f"Preset '{original_name}' has been copied to '{name}'."
+                    )
+                self.refresh_preset_list()
+                # Select the new preset
+                items = self.preset_list.findItems(name.strip(), Qt.MatchFlag.MatchExactly)
+                if items:
+                    self.preset_list.setCurrentItem(items[0])
+            except Exception as e:
+                if self.settings.show_error_messages:
+                    QMessageBox.critical(self, "Error", f"Failed to duplicate preset:\n{e}")
 
     def change_theme(self, mode):
         # Uncheck other theme buttons
