@@ -33,6 +33,9 @@ UninstallDisplayIcon={app}\{#MyAppExeName}
 PrivilegesRequired=lowest
 ; Windows Version
 MinVersion=10.0
+; Close running instances automatically
+CloseApplications=yes
+RestartApplications=no
 
 [Languages]
 Name: "english"; MessagesFile: "compiler:Default.isl"
@@ -56,16 +59,16 @@ Name: "{autodesktop}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"; Tasks: de
 Filename: "{app}\{#MyAppExeName}"; Description: "{cm:LaunchProgram,{#MyAppName}}"; Flags: nowait postinstall skipifsilent
 
 [Registry]
-Root: HKCU; Subkey: "Software\Microsoft\Windows\CurrentVersion\Run"; ValueType: string; ValueName: "MonitorSnap"; ValueData: """{app}\{#MyAppExeName}"""; Flags: uninsdeletevalue; Tasks: startup
+Root: HKCU; Subkey: "Software\Microsoft\Windows\CurrentVersion\Run"; ValueType: string; ValueName: "DisplayPresets"; ValueData: """{app}\{#MyAppExeName}"""; Flags: uninsdeletevalue; Tasks: startup
 
 [Code]
 procedure CurStepChanged(CurStep: TSetupStep);
 var
   ResultCode: Integer;
 begin
-  if CurStep = ssPostInstall then
+  if CurStep = ssPrepare then
   begin
-    // Kill any running instances before installation
+    // Kill any running instances before installation begins
     Exec('taskkill', '/F /IM ' + '{#MyAppExeName}', '', SW_HIDE, ewWaitUntilTerminated, ResultCode);
   end;
 end;
@@ -73,10 +76,27 @@ end;
 procedure CurUninstallStepChanged(CurUninstallStep: TUninstallStep);
 var
   ResultCode: Integer;
+  AppDataDir: String;
 begin
   if CurUninstallStep = usUninstall then
   begin
     // Kill any running instances before uninstall
     Exec('taskkill', '/F /IM ' + '{#MyAppExeName}', '', SW_HIDE, ewWaitUntilTerminated, ResultCode);
+    // Also remove the in-app autostart registry entry (managed by the app itself)
+    RegDeleteValue(HKCU, 'Software\Microsoft\Windows\CurrentVersion\Run', 'DisplayPresets');
+  end;
+
+  if CurUninstallStep = usPostUninstall then
+  begin
+    // Offer to remove user data
+    AppDataDir := ExpandConstant('{userappdata}\DisplayPresets');
+    if DirExists(AppDataDir) then
+    begin
+      if MsgBox('Do you want to remove saved presets and settings?' + #13#10 + AppDataDir,
+                mbConfirmation, MB_YESNO) = IDYES then
+      begin
+        DelTree(AppDataDir, True, True, True);
+      end;
+    end;
   end;
 end;

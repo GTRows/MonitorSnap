@@ -35,3 +35,11 @@ installer/
 # Development files (local only)
 DEV.md
 dev.py
+
+# Local test/run scripts
+run_test.bat
+run_test.sh
+app_test.log
+
+# Claude Code project instructions (local only)
+CLAUDE.md

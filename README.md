@@ -16,11 +16,14 @@ This tool lets you save display presets (positions, resolutions, refresh rates, 
 
 - Save unlimited display presets
 - Visual preview of monitor layout with primary monitor indicator (★)
+- Interactive edit mode — drag monitors to rearrange, set primary with double-click
+- Duplicate preset with automatic extend mode conversion
 - Restore with one click from tray menu
 - Global hotkeys for instant preset switching
 - Rename/delete presets
 - Dark/Light/System theme
 - Auto-start with Windows
+- CLI interface for scripting and automation
 - Fully portable (all data in %APPDATA%)
 
 ## What Gets Saved
@@ -174,7 +177,7 @@ Access via **Settings → Open data folder**
 ## Project Structure
 
 ```
-DisplayPresets/
+MonitorSnap/
 ├── display_presets/          # Main Python package
 │   ├── __init__.py          # Package initialization
 │   ├── __main__.py          # Entry point (python -m display_presets)
@@ -186,7 +189,9 @@ DisplayPresets/
 │   ├── settings.py          # Application settings
 │   ├── config.py            # Configuration & paths
 │   ├── autostart.py         # Windows startup integration
-│   └── theme.py             # Theme detection
+│   ├── cli.py               # Command-line interface
+│   ├── theme.py             # Theme detection
+│   └── theme_colors.py      # Theme color definitions
 ├── assets/
 │   └── icons/               # Application icons
 │       ├── app.ico
@@ -198,13 +203,15 @@ DisplayPresets/
 ├── docs/                    # Documentation
 │   ├── BUILD_INSTRUCTIONS.md
 │   └── CONTRIBUTING.md
-├── tests/                   # Unit tests (future)
-├── .gitignore              # Git ignore rules
-├── LICENSE                 # MIT License
-├── MANIFEST.in             # Package manifest
-├── README.md               # This file
-├── requirements.txt        # Python dependencies
-└── setup.py                # Package setup
+├── screenshots/             # Screenshots for documentation
+├── .github/workflows/       # CI/CD pipelines
+├── .gitignore
+├── LICENSE                  # MIT License
+├── MANIFEST.in
+├── README.md
+├── requirements.txt
+├── setup.iss                # Inno Setup installer script
+└── setup.py
 ```
 
 ## Building from source
@@ -281,17 +288,25 @@ Contributions are welcome! This project started as a personal tool and has grown
 **Ideas for contributions:**
 - Support for display rotation in preview
 - Export/import presets to share with others
-- Command-line interface for scripting
 - Display profile auto-switching based on connected monitors
 - Integration with Windows Task Scheduler for automatic preset application
+- Multi-language support
 
 ## Changelog
+
+### Version 1.1.0
+- Interactive Edit Mode: drag monitors to rearrange, double-click to set primary
+- Duplicate preset with automatic extend mode conversion
+- CLI interface for scripting (`monitorsnap list/apply/save/delete/rename`)
+- Comprehensive Settings UI with categorized options
+- Simplified theme selector
+- Improved collision detection for monitor positioning
 
 ### Version 1.0.0 (2026-01)
 - Initial public release
 - Save and restore display configurations
 - Global hotkey support
-- Visual monitor preview with sequential numbering
+- Visual monitor preview with sequential numbering and primary indicator (★)
 - Dark/Light/System theme support
 - Auto-start with Windows
 - System tray integration
