@@ -16,7 +16,7 @@ def is_enabled():
         except FileNotFoundError:
             winreg.CloseKey(key)
             return False
-    except:
+    except OSError:
         return False
 
 

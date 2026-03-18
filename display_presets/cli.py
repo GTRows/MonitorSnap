@@ -20,7 +20,8 @@ from typing import Optional
 
 
 def get_version():
-    return "1.0.0"
+    from display_presets import __version__
+    return __version__
 
 
 def create_parser():
@@ -135,7 +136,7 @@ def cmd_list(args):
                         "hotkey": data.get('hotkey'),
                         "created_at": data.get('created_at')
                     })
-                except:
+                except Exception:
                     detailed.append({"name": name, "error": "Could not load"})
             print(json.dumps({"success": True, "presets": detailed}, indent=2))
         else:

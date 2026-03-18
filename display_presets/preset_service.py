@@ -1,4 +1,5 @@
 import json
+from datetime import datetime
 from pathlib import Path
 from display_presets.config import get_presets_dir
 
@@ -14,7 +15,7 @@ class PresetService:
         data = {
             'config': config,
             'hotkey': hotkey,
-            'created_at': __import__('datetime').datetime.now().isoformat()
+            'created_at': datetime.now().isoformat()
         }
 
         path = self._path(name)
@@ -34,24 +35,6 @@ class PresetService:
             else:
                 # Old format: just the config
                 return {'config': data, 'hotkey': None, 'created_at': None}
-
-    def get_config(self, name):
-        """Get just the display config"""
-        data = self.load(name)
-        return data['config']
-
-    def get_hotkey(self, name):
-        """Get hotkey for preset"""
-        data = self.load(name)
-        return data.get('hotkey')
-
-    def set_hotkey(self, name, hotkey):
-        """Update hotkey for existing preset"""
-        data = self.load(name)
-        data['hotkey'] = hotkey
-        path = self._path(name)
-        with open(path, 'w') as f:
-            json.dump(data, f, indent=2)
 
     def list_names(self):
         return sorted([f.stem for f in self.dir.glob("*.json")])
