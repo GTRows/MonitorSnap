@@ -1,9 +1,5 @@
-"""
-Display Presets - Windows 11 display configuration manager.
+"""MonitorSnap - Windows display configuration manager."""
 
-A modern Windows utility for saving and restoring monitor configurations.
-"""
-
-__version__ = "1.0.0"
-__author__ = "Display Presets Contributors"
+__version__ = "2.0.0"
+__author__ = "GTRows"
 __license__ = "MIT"

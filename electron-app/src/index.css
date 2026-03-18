@@ -1,0 +1,106 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Windows 11 Fluent Design theme tokens */
+:root {
+  --accent-color: #0078d4;
+  --surface-base: #f5f5f5;
+  --surface-raised: #ffffff;
+  --surface-overlay: #ffffff;
+  --border-subtle: #e5e5e5;
+  --border-default: #d1d1d1;
+  --text-primary: #1a1a1a;
+  --text-secondary: #616161;
+  --text-tertiary: #9a9a9a;
+  --nav-active-bg: rgba(0, 0, 0, 0.04);
+  --nav-hover-bg: rgba(0, 0, 0, 0.03);
+  --input-bg: #ffffff;
+  --canvas-bg: #fafafa;
+  --monitor-bg: rgba(0, 0, 0, 0.02);
+  --toggle-off-bg: #c4c4c4;
+  --badge-bg: rgba(0, 0, 0, 0.05);
+  --table-header-bg: rgba(0, 0, 0, 0.02);
+}
+
+.dark {
+  --accent-color: #60cdff;
+  --surface-base: #1c1c1c;
+  --surface-raised: #2d2d2d;
+  --surface-overlay: #383838;
+  --border-subtle: #3a3a3a;
+  --border-default: #4a4a4a;
+  --text-primary: #f5f5f5;
+  --text-secondary: #a0a0a0;
+  --text-tertiary: #6a6a6a;
+  --nav-active-bg: rgba(255, 255, 255, 0.06);
+  --nav-hover-bg: rgba(255, 255, 255, 0.04);
+  --input-bg: #2d2d2d;
+  --canvas-bg: #222222;
+  --monitor-bg: rgba(255, 255, 255, 0.04);
+  --toggle-off-bg: #555555;
+  --badge-bg: rgba(255, 255, 255, 0.08);
+  --table-header-bg: rgba(255, 255, 255, 0.03);
+}
+
+/* Base styles */
+html, body, #root {
+  height: 100%;
+  margin: 0;
+  padding: 0;
+  overflow: hidden;
+  font-family: 'Segoe UI Variable', 'Segoe UI', 'Inter', system-ui, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* Frameless window drag region */
+.app-drag-region {
+  -webkit-app-region: drag;
+}
+
+.app-drag-region button,
+.app-drag-region input,
+.app-drag-region a {
+  -webkit-app-region: no-drag;
+}
+
+/* Scrollbar styling */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--border-subtle);
+  border-radius: 3px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: var(--border-default);
+}
+
+/* Selection */
+::selection {
+  background: rgba(96, 205, 255, 0.25);
+}
+
+/* Focus visible */
+*:focus-visible {
+  outline: 2px solid var(--accent-color);
+  outline-offset: 1px;
+  border-radius: 4px;
+}
+
+/* Reduced motion */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}

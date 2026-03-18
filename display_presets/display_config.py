@@ -1,5 +1,10 @@
 import ctypes
+import json
 from ctypes import wintypes, Structure, POINTER, c_uint32, c_int32, c_uint64, c_bool
+
+from display_presets.logger import get_logger
+
+_log = get_logger('display_config')
 
 
 # Win32 API structures
@@ -144,20 +149,146 @@ class DisplayConfigManager:
         }
 
     def apply(self, cfg):
-        pc = len(cfg['paths'])
-        mc = len(cfg['modes'])
+        """Apply a saved display configuration using a two-phase approach.
 
-        paths = (DISPLAYCONFIG_PATH_INFO * pc)()
-        modes = (DISPLAYCONFIG_MODE_INFO * mc)()
+        Phase 1 — Set the source-to-target topology via SDC_TOPOLOGY_SUPPLIED
+        using fresh adapter LUIDs (avoids stale serialized data).
 
-        for i, p in enumerate(cfg['paths']):
-            self._load_path(paths[i], p)
+        Phase 2 — Query the resulting fresh config from Windows, adjust source
+        positions to match the saved preset, and apply back.
+        """
+        _INVALID = 0xFFFFFFFF
 
-        for i, m in enumerate(cfg['modes']):
-            self._load_mode(modes[i], m)
+        # --- Extract desired source positions from saved config ---
+        desired = {}  # target_id -> {x, y}
+        for p in cfg['paths']:
+            tid = p['targetInfo']['id']
+            si = p['sourceInfo']['modeInfoIdx']
+            if si != _INVALID and si < len(cfg['modes']):
+                m = cfg['modes'][si]
+                if m.get('infoType') == 1 and 'sourceMode' in m:
+                    sm = m['sourceMode']
+                    desired[tid] = {'x': sm['position']['x'], 'y': sm['position']['y']}
+
+        _log.debug('apply: desired positions for %d targets: %s', len(desired), desired)
+
+        # --- Get current adapter LUID ---
+        pc0, mc0 = c_uint32(), c_uint32()
+        r = GetDisplayConfigBufferSizes(0x02, ctypes.byref(pc0), ctypes.byref(mc0))
+        if r != 0:
+            _log.error('GetDisplayConfigBufferSizes failed: %d', r)
+            return r
+        cur_p = (DISPLAYCONFIG_PATH_INFO * pc0.value)()
+        cur_m = (DISPLAYCONFIG_MODE_INFO * mc0.value)()
+        r = QueryDisplayConfig(0x02, ctypes.byref(pc0), cur_p, ctypes.byref(mc0), cur_m, None)
+        if r != 0:
+            _log.error('QueryDisplayConfig failed: %d', r)
+            return r
+
+        cur_info = {}
+        for i in range(pc0.value):
+            tid = cur_p[i].targetInfo.id
+            cur_info[tid] = {
+                'luid_lo': cur_p[i].sourceInfo.adapterId.LowPart,
+                'luid_hi': cur_p[i].sourceInfo.adapterId.HighPart,
+                'out_tech': cur_p[i].targetInfo.outputTechnology,
+            }
+
+        default_ci = next(iter(cur_info.values())) if cur_info else {
+            'luid_lo': 0, 'luid_hi': 0, 'out_tech': 0,
+        }
+
+        # --- Phase 1: Set topology ---
+        saved = cfg['paths']
+        n = len(saved)
+        tp = (DISPLAYCONFIG_PATH_INFO * n)()
+
+        for i, sp in enumerate(saved):
+            tid = sp['targetInfo']['id']
+            ci = cur_info.get(tid, default_ci)
+
+            tp[i].sourceInfo.adapterId.LowPart = ci['luid_lo']
+            tp[i].sourceInfo.adapterId.HighPart = ci['luid_hi']
+            tp[i].sourceInfo.id = sp['sourceInfo']['id']
+            tp[i].sourceInfo.modeInfoIdx = _INVALID
+            tp[i].sourceInfo.statusFlags = 0
+
+            tp[i].targetInfo.adapterId.LowPart = ci['luid_lo']
+            tp[i].targetInfo.adapterId.HighPart = ci['luid_hi']
+            tp[i].targetInfo.id = tid
+            tp[i].targetInfo.modeInfoIdx = _INVALID
+            tp[i].targetInfo.outputTechnology = ci['out_tech']
+            tp[i].targetInfo.rotation = 1       # DISPLAYCONFIG_ROTATION_IDENTITY
+            tp[i].targetInfo.scaling = 128       # DISPLAYCONFIG_SCALING_PREFERRED
+            tp[i].targetInfo.refreshRate.Numerator = 0
+            tp[i].targetInfo.refreshRate.Denominator = 0
+            tp[i].targetInfo.scanLineOrdering = 0
+            tp[i].targetInfo.targetAvailable = True
+            tp[i].targetInfo.statusFlags = 0
+
+            tp[i].flags = 1  # DISPLAYCONFIG_PATH_ACTIVE
+
+        for i in range(n):
+            _log.debug(
+                '  topo[%d]: src(id=%d) tgt(id=%d tech=%d)',
+                i, tp[i].sourceInfo.id, tp[i].targetInfo.id,
+                tp[i].targetInfo.outputTechnology,
+            )
+
+        # SDC_APPLY | SDC_TOPOLOGY_SUPPLIED | SDC_ALLOW_PATH_ORDER_CHANGES
+        # NOTE: SDC_TOPOLOGY_SUPPLIED must NOT be combined with SDC_ALLOW_CHANGES
+        # or SDC_SAVE_TO_DATABASE — those are only valid with SDC_USE_SUPPLIED_DISPLAY_CONFIG.
+        r1 = SetDisplayConfig(n, tp, 0, None, 0x80 | 0x10 | 0x2000)
+        _log.info('Phase 1 (topology): %d paths, code=%d', n, r1)
+
+        if r1 != 0:
+            _log.error('Phase 1 failed: code=%d — cannot set topology', r1)
+            return r1
+
+        # --- Phase 2: Adjust source positions on fresh config ---
+        if not desired:
+            _log.info('No position data in saved config; topology applied, done')
+            return 0
+
+        pc2, mc2 = c_uint32(), c_uint32()
+        GetDisplayConfigBufferSizes(0x02, ctypes.byref(pc2), ctypes.byref(mc2))
+        fp = (DISPLAYCONFIG_PATH_INFO * pc2.value)()
+        fm = (DISPLAYCONFIG_MODE_INFO * mc2.value)()
+        QueryDisplayConfig(0x02, ctypes.byref(pc2), fp, ctypes.byref(mc2), fm, None)
+
+        _log.debug('Phase 2: fresh config has %d paths, %d modes', pc2.value, mc2.value)
+
+        changed = False
+        for i in range(pc2.value):
+            tid = fp[i].targetInfo.id
+            if tid not in desired:
+                continue
+            d = desired[tid]
+            si = fp[i].sourceInfo.modeInfoIdx
+            if si == _INVALID or si >= mc2.value or fm[si].infoType != 1:
+                continue
+            sm = fm[si].modeInfo.sourceMode
+            if sm.position.x != d['x'] or sm.position.y != d['y']:
+                _log.debug(
+                    '  tgt %d: pos (%d,%d) -> (%d,%d)',
+                    tid, sm.position.x, sm.position.y, d['x'], d['y'],
+                )
+                sm.position.x = d['x']
+                sm.position.y = d['y']
+                changed = True
+
+        if not changed:
+            _log.info('Positions already match saved preset; done')
+            return 0
 
         # SDC_APPLY | SDC_USE_SUPPLIED_DISPLAY_CONFIG | SDC_ALLOW_CHANGES
-        return SetDisplayConfig(pc, paths, mc, modes, 0x80 | 0x20 | 0x400)
+        r2 = SetDisplayConfig(pc2.value, fp, mc2.value, fm, 0x80 | 0x20 | 0x400)
+        _log.info('Phase 2 (positions): code=%d', r2)
+
+        if r2 != 0:
+            _log.warning('Phase 2 failed but topology was set in Phase 1')
+
+        return 0
 
     def _dump_path(self, p):
         return {
@@ -224,62 +355,118 @@ class DisplayConfigManager:
             }
         return d
 
-    def _load_path(self, p, d):
-        p.sourceInfo.adapterId.LowPart = d['sourceInfo']['adapterId']['LowPart']
-        p.sourceInfo.adapterId.HighPart = d['sourceInfo']['adapterId']['HighPart']
-        p.sourceInfo.id = d['sourceInfo']['id']
-        p.sourceInfo.modeInfoIdx = d['sourceInfo']['modeInfoIdx']
-        p.sourceInfo.statusFlags = d['sourceInfo']['statusFlags']
+    # SDC_APPLY | topology flag — no paths/modes needed, Windows picks best fit
+    _TOPOLOGY_FLAGS = {
+        'extend':   0x80 | 0x04,
+        'clone':    0x80 | 0x02,
+        'internal': 0x80 | 0x01,
+        'external': 0x80 | 0x08,
+    }
 
-        p.targetInfo.adapterId.LowPart = d['targetInfo']['adapterId']['LowPart']
-        p.targetInfo.adapterId.HighPart = d['targetInfo']['adapterId']['HighPart']
-        p.targetInfo.id = d['targetInfo']['id']
-        p.targetInfo.modeInfoIdx = d['targetInfo']['modeInfoIdx']
-        p.targetInfo.outputTechnology = d['targetInfo']['outputTechnology']
-        p.targetInfo.rotation = d['targetInfo']['rotation']
-        p.targetInfo.scaling = d['targetInfo']['scaling']
-        p.targetInfo.refreshRate.Numerator = d['targetInfo']['refreshRate']['Numerator']
-        p.targetInfo.refreshRate.Denominator = d['targetInfo']['refreshRate']['Denominator']
-        p.targetInfo.scanLineOrdering = d['targetInfo']['scanLineOrdering']
-        p.targetInfo.targetAvailable = d['targetInfo']['targetAvailable']
-        p.targetInfo.statusFlags = d['targetInfo']['statusFlags']
-        p.flags = d['flags']
+    def rebuild_config_for_monitors(self, config: dict, monitors: list) -> dict:
+        """
+        Produce a modified copy of `config` whose source-mode assignments reflect
+        the topology encoded in `monitors` (the edited monitor list from the frontend).
 
-    def _load_mode(self, m, d):
-        m.infoType = d['infoType']
-        m.id = d['id']
-        m.adapterId.LowPart = d['adapterId']['LowPart']
-        m.adapterId.HighPart = d['adapterId']['HighPart']
+        Monitors that share the same (x, y, width, height) are treated as a clone
+        group and will be assigned the same source mode (and the same sourceInfo.id).
+        Monitors with unique positions are extended and receive independent sources.
 
-        if m.infoType == 1 and 'sourceMode' in d:
-            sm = d['sourceMode']
-            m.modeInfo.sourceMode.width = sm['width']
-            m.modeInfo.sourceMode.height = sm['height']
-            m.modeInfo.sourceMode.pixelFormat = sm['pixelFormat']
-            m.modeInfo.sourceMode.position.x = sm['position']['x']
-            m.modeInfo.sourceMode.position.y = sm['position']['y']
-        elif m.infoType == 2 and 'targetMode' in d:
-            v = d['targetMode']['targetVideoSignalInfo']
-            m.modeInfo.targetMode.targetVideoSignalInfo.pixelRate = v['pixelRate']
-            m.modeInfo.targetMode.targetVideoSignalInfo.hSyncFreq.Numerator = v['hSyncFreq']['Numerator']
-            m.modeInfo.targetMode.targetVideoSignalInfo.hSyncFreq.Denominator = v['hSyncFreq']['Denominator']
-            m.modeInfo.targetMode.targetVideoSignalInfo.vSyncFreq.Numerator = v['vSyncFreq']['Numerator']
-            m.modeInfo.targetMode.targetVideoSignalInfo.vSyncFreq.Denominator = v['vSyncFreq']['Denominator']
-            m.modeInfo.targetMode.targetVideoSignalInfo.activeSize.cx = v['activeSize']['cx']
-            m.modeInfo.targetMode.targetVideoSignalInfo.activeSize.cy = v['activeSize']['cy']
-            m.modeInfo.targetMode.targetVideoSignalInfo.totalSize.cx = v['totalSize']['cx']
-            m.modeInfo.targetMode.targetVideoSignalInfo.totalSize.cy = v['totalSize']['cy']
-            m.modeInfo.targetMode.targetVideoSignalInfo.videoStandard = v['videoStandard']
-            m.modeInfo.targetMode.targetVideoSignalInfo.scanLineOrdering = v['scanLineOrdering']
-        elif m.infoType == 3 and 'desktopImageInfo' in d:
-            di = d['desktopImageInfo']
-            m.modeInfo.desktopImageInfo.PathSourceSize.x = di['PathSourceSize']['x']
-            m.modeInfo.desktopImageInfo.PathSourceSize.y = di['PathSourceSize']['y']
-            m.modeInfo.desktopImageInfo.DesktopImageRegion.left = di['DesktopImageRegion']['left']
-            m.modeInfo.desktopImageInfo.DesktopImageRegion.top = di['DesktopImageRegion']['top']
-            m.modeInfo.desktopImageInfo.DesktopImageRegion.right = di['DesktopImageRegion']['right']
-            m.modeInfo.desktopImageInfo.DesktopImageRegion.bottom = di['DesktopImageRegion']['bottom']
-            m.modeInfo.desktopImageInfo.DesktopImageClip.left = di['DesktopImageClip']['left']
-            m.modeInfo.desktopImageInfo.DesktopImageClip.top = di['DesktopImageClip']['top']
-            m.modeInfo.desktopImageInfo.DesktopImageClip.right = di['DesktopImageClip']['right']
-            m.modeInfo.desktopImageInfo.DesktopImageClip.bottom = di['DesktopImageClip']['bottom']
+        Each monitor must have id='monitor_N' where N is the corresponding path
+        index in config['paths'] — this is the convention used by get_current_displays().
+        """
+        import copy
+
+        cfg = copy.deepcopy(config)
+        paths = cfg['paths']
+        modes = cfg['modes']
+
+        _INVALID = 0xFFFFFFFF
+
+        # Build path_idx -> monitor map
+        idx_to_mon = {}
+        for m in monitors:
+            mid = m.get('id', '')
+            if isinstance(mid, str) and mid.startswith('monitor_'):
+                try:
+                    idx = int(mid.split('_', 1)[1])
+                    if 0 <= idx < len(paths):
+                        idx_to_mon[idx] = m
+                except (ValueError, IndexError):
+                    pass
+
+        if not idx_to_mon:
+            return cfg
+
+        # Group path indices by the new position key (clone groups share a position)
+        pos_to_paths = {}
+        for idx, m in idx_to_mon.items():
+            key = (int(m['x']), int(m['y']), int(m['width']), int(m['height']))
+            pos_to_paths.setdefault(key, []).append(idx)
+        for k in pos_to_paths:
+            pos_to_paths[k].sort()
+
+        # Process groups left-to-right/top-to-bottom so the leftmost group gets
+        # priority when claiming an original source mode slot.
+        claimed = {}          # orig_mode_idx -> leader path_idx that owns it
+        valid_src_ids = [p['sourceInfo']['id'] for p in paths if p['sourceInfo']['id'] != _INVALID]
+        next_src_id = (max(valid_src_ids) + 1) if valid_src_ids else 1
+
+        for pos_key in sorted(pos_to_paths.keys()):
+            x, y, w, h = pos_key
+            path_indices = pos_to_paths[pos_key]
+            leader = path_indices[0]
+
+            # Find a valid source mode index to use as the base for this group.
+            # Prefer the leader's own original mode, fall back to any follower's.
+            orig_mode_idx = paths[leader]['sourceInfo']['modeInfoIdx']
+            if orig_mode_idx == _INVALID or orig_mode_idx >= len(modes):
+                orig_mode_idx = _INVALID
+                for pi in path_indices[1:]:
+                    alt = paths[pi]['sourceInfo']['modeInfoIdx']
+                    if alt != _INVALID and alt < len(modes):
+                        orig_mode_idx = alt
+                        break
+
+            if orig_mode_idx == _INVALID:
+                continue
+
+            if orig_mode_idx not in claimed:
+                # Claim this mode slot for our group
+                actual_mode_idx = orig_mode_idx
+                claimed[orig_mode_idx] = leader
+                leader_src_id = paths[leader]['sourceInfo']['id']
+            else:
+                # Slot already taken by another group (split case): create a new one
+                new_mode = copy.deepcopy(modes[orig_mode_idx])
+                leader_src_id = next_src_id
+                next_src_id += 1
+                new_mode['id'] = leader_src_id
+                actual_mode_idx = len(modes)
+                modes.append(new_mode)
+                claimed[actual_mode_idx] = leader
+                paths[leader]['sourceInfo']['id'] = leader_src_id
+
+            # Update source mode position and dimensions to match the edited layout
+            mode = modes[actual_mode_idx]
+            if mode.get('infoType') == 1:
+                mode['sourceMode']['position']['x'] = x
+                mode['sourceMode']['position']['y'] = y
+                mode['sourceMode']['width'] = w
+                mode['sourceMode']['height'] = h
+
+            # Point all paths in this group at the same source
+            for pi in path_indices:
+                paths[pi]['sourceInfo']['id'] = leader_src_id
+                paths[pi]['sourceInfo']['modeInfoIdx'] = actual_mode_idx
+
+        return cfg
+
+    def set_topology(self, topology: str) -> dict:
+        flag = self._TOPOLOGY_FLAGS.get(topology)
+        if flag is None:
+            raise ValueError(f'Unknown topology: {topology}')
+        result = SetDisplayConfig(0, None, 0, None, flag)
+        if result != 0:
+            raise Exception(f'SetDisplayConfig topology={topology} failed: {result}')
+        return self.get_current()
