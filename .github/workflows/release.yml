@@ -10,6 +10,7 @@ permissions:
 
 jobs:
   build-release:
+    name: Build and release
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v4
@@ -20,7 +21,9 @@ jobs:
           python-version: '3.11'
 
       - name: Verify Python backend
-        run: python -c "from display_presets.server import main"
+        run: |
+          python -m py_compile display_presets/server.py
+          python -c "from display_presets.server import main; from display_presets.cli import run_cli"
 
       - name: Set up Node.js
         uses: actions/setup-node@v4
@@ -30,6 +33,15 @@ jobs:
       - name: Install dependencies
         working-directory: electron-app
         run: npm ci
+
+      - name: TypeScript check
+        working-directory: electron-app
+        run: npx tsc --noEmit
+
+      # - name: Run tests
+      #   run: |
+      #     python -m pytest tests/ -v
+      #     cd electron-app && npm test
 
       - name: Build Electron app
         working-directory: electron-app
