@@ -181,6 +181,13 @@ git checkout -b hotfix/fix-description
 # fix, commit, PR into main AND develop
 ```
 
+## Roadmap
+
+Planned features for upcoming releases:
+
+- **Auto-update** -- Check for new versions on startup, download and install updates automatically via GitHub Releases
+- **Localization** -- Multi-language UI support (English, Turkish, and community translations)
+
 ## Known Issues
 
 - All monitors from the preset must be physically connected when applying
