@@ -1,312 +1,150 @@
 # MonitorSnap
 
-A modern Windows 11 tray app for instantly switching between different display configurations. Perfect for KVM switch users, multi-monitor setups, and anyone who frequently changes their display arrangement.
+A Windows desktop app for saving and restoring display configurations. Built with Electron + React frontend and a Python backend using the Windows Display Configuration API.
 
-## Why?
-
-**Do you switch between different monitor setups?**
-- Using a KVM switch to share monitors between multiple PCs
-- Gaming on a single high-refresh monitor vs. working on multiple displays
-- Docking/undocking your laptop throughout the day
-- Presenting with a projector vs. your regular setup
-
-This tool lets you save display presets (positions, resolutions, refresh rates, orientation) and switch between them instantly with global hotkeys or one click from the tray menu.
+Primary use case: KVM switch users who need to instantly switch between different display setups.
 
 ## Features
 
-- Save unlimited display presets
-- Visual preview of monitor layout with primary monitor indicator (★)
-- Interactive edit mode — drag monitors to rearrange, set primary with double-click
-- Duplicate preset with automatic extend mode conversion
-- Restore with one click from tray menu
+- Save and restore complete display configurations
+- Visual monitor layout preview with drag-to-rearrange editing
 - Global hotkeys for instant preset switching
-- Rename/delete presets
-- Dark/Light/System theme
+- System tray with quick-apply menu
+- Dark / Light / System theme (Windows 11 Fluent Design)
 - Auto-start with Windows
-- CLI interface for scripting and automation
-- Fully portable (all data in %APPDATA%)
+- CLI interface for scripting
 
 ## What Gets Saved
 
-Each preset captures your complete display configuration:
+Each preset captures the full display state via Windows Display Configuration API:
 
-- **Monitor Positions** - Exact X,Y coordinates for each display
-- **Resolutions** - Width and height for each monitor
-- **Refresh Rates** - 60Hz, 144Hz, 165Hz, etc.
-- **Orientation** - Landscape, portrait, or flipped
-- **Primary Monitor** - Which monitor has the taskbar and Start menu
-- **Scaling** - Display scaling settings
-- **Display Topology** - Extended desktop, duplicate, or single display mode
-
-> All settings are retrieved directly from Windows Display Configuration API for pixel-perfect accuracy.
+- Monitor positions (X, Y coordinates)
+- Resolutions and refresh rates
+- Orientation (landscape, portrait, flipped)
+- Primary monitor assignment
+- Display topology (extended, cloned, single)
+- Scaling settings
 
 ## Installation
 
-### Option 1: Setup Installer (Recommended)
+### From Source
 
-1. Download `MonitorSnapSetup-x.x.x.exe` from [Releases](https://github.com/GTRows/MonitorSnap/releases)
-2. Run the installer
-3. Optionally enable "Launch at Windows startup"
-
-### Option 2: Portable Version
-
-1. Download `MonitorSnap-vx.x.x-portable.zip` from [Releases](https://github.com/GTRows/MonitorSnap/releases)
-2. Extract and run `MonitorSnap.exe`
-3. No installation needed - fully portable
-
-### Option 3: Run from Source (For Developers)
+Requirements: Windows 10/11, Python 3.10+, Node.js 20+
 
 ```bash
-# Clone the repository
 git clone https://github.com/GTRows/MonitorSnap.git
 cd MonitorSnap
 
-# Install dependencies
-pip install -r requirements.txt
-
-# Run the application
-python -m display_presets
+# Start the Electron app (handles everything)
+dev.bat
 ```
 
-### Build Your Own
+`dev.bat` installs npm dependencies, builds the Electron main process, and launches the app with the Python backend.
+
+### Manual Start
 
 ```bash
-# Build standalone executable
-python scripts/build_exe.py
-
-# Build installer (requires Inno Setup)
-"C:\Program Files (x86)\Inno Setup 6\ISCC.exe" setup.iss
+cd electron-app
+npm install
+npm run electron:dev
 ```
 
-## Usage
+This starts Vite dev server + Electron. The Python HTTP backend is spawned automatically by the Electron main process.
 
-### Quick Start
+### CLI Only (no GUI)
 
-1. **Launch the app** - It runs in the system tray (look for the monitor icon)
-2. **Arrange your monitors** - Use Windows Display Settings to set up your ideal configuration
-3. **Save as preset**:
-   - Right-click tray icon → "Save current preset..."
-   - Or double-click tray icon → "New" button
-   - Enter a descriptive name (e.g., "Work Setup", "Gaming", "Triple Monitor")
-4. **Apply anytime**:
-   - Right-click tray icon → Presets → [Your preset] → Apply
-   - Or use the hotkey you assigned (see below)
-
-### Example Scenarios
-
-**KVM Switch Users:**
-```
-Preset "Work PC":      3 monitors in landscape (1440p @ 60Hz)
-Preset "Personal PC":  Main monitor 1440p @ 144Hz, side monitors portrait
-Preset "Gaming":       Single monitor 1440p @ 165Hz
-
-Hotkeys:
-- Ctrl+Shift+1 → Work PC
-- Ctrl+Shift+2 → Personal PC
-- Ctrl+Shift+3 → Gaming
-
-Switch your KVM, then press the hotkey - instant configuration!
+```bash
+pip install -e .
+monitorsnap list
+monitorsnap save "Work Setup"
+monitorsnap apply "Work Setup"
 ```
 
-**Laptop + Docking Station:**
-```
-Preset "Mobile":       Just laptop screen
-Preset "Docked":       Laptop + 2 external monitors
-Preset "Presentation": Laptop + projector (duplicate mode)
+## Architecture
 
-Hotkeys:
-- Ctrl+Shift+1 → Mobile
-- Ctrl+Shift+2 → Docked
-- Ctrl+Shift+3 → Presentation
 ```
-
-**Multi-Monitor Gaming/Productivity:**
-```
-Preset "Gaming":       Main monitor 144Hz fullscreen, others off
-Preset "Productivity": All 3 monitors at native resolution
-Preset "Streaming":    Main + side monitor for OBS/chat
-
-Press Ctrl+Shift+G to instantly switch to gaming mode!
+Electron Main Process
+    |
+    |-- spawns --> Python HTTP Server (127.0.0.1:{random port})
+    |                  |
+    |                  |-- display_config.py  (Windows CCD API via ctypes)
+    |                  |-- store.py           (preset CRUD, %APPDATA%)
+    |                  |-- settings.py        (user preferences)
+    |                  |-- displays.py        (current monitor info)
+    |
+    |-- IPC --> React Renderer (Vite + TailwindCSS + Zustand)
+                   |
+                   |-- pages/      (Presets, Displays, Settings, About)
+                   |-- components/ (MonitorCanvas, HotkeyInput, etc.)
+                   |-- stores/     (presetStore, settingsStore, etc.)
 ```
 
-### Main Window (Dashboard)
-
-**Double-click** the tray icon to open the dashboard.
-
-**Three tabs:**
-- **Presets** - Manage all presets with visual preview
-  - Left: List of saved presets (double-click to apply)
-  - Right: Visual monitor layout showing positions and Monitor 1, 2, 3...
-  - Bottom: Assign hotkeys (e.g., Ctrl+Shift+1) for instant switching
-- **Settings** - Theme (Dark/Light/System), autostart, data folder location
-- **About** - Version info, usage guide, technical details
-
-### Tray Menu
-
-**Right-click** the tray icon for quick access:
-- **Dashboard** - Opens the main window
-- **Save current preset...** - Quick save without opening dashboard
-- **Presets → [name]** - Apply, Rename, or Delete any preset
-- **Exit** - Close the application
-
-### Global Hotkeys
-
-Assign custom hotkeys to each preset for instant switching:
-- Format: `Ctrl+Shift+1`, `Ctrl+Alt+F1`, `Ctrl+Shift+M`, etc.
-- Hotkeys work globally even when the window is hidden
-- Press the hotkey anytime to instantly apply that preset
-- Configure in: Dashboard → Select preset → Enter hotkey → Save
-
-## How it works
-
-Uses Windows Display Configuration API:
-- `GetDisplayConfigBufferSizes`
-- `QueryDisplayConfig`
-- `SetDisplayConfig`
-
-Saves raw display paths and modes to JSON, then restores exactly as-is.
-
-## Data storage
-
-Everything lives in `%APPDATA%\DisplayPresets\`:
-- `presets\` - Your saved configurations
-- `settings.json` - App preferences
-
-Access via **Settings → Open data folder**
+The Python server picks a free port, writes `READY:{port}` to stdout. Electron reads this and proxies all IPC requests to `http://127.0.0.1:{port}/`.
 
 ## Project Structure
 
 ```
 MonitorSnap/
-├── display_presets/          # Main Python package
-│   ├── __init__.py          # Package initialization
-│   ├── __main__.py          # Entry point (python -m display_presets)
-│   ├── gui.py               # Main window & UI
-│   ├── tray.py              # System tray application
-│   ├── display_config.py    # Windows Display Configuration API
-│   ├── hotkey_manager.py    # Global hotkey handling
-│   ├── preset_service.py    # Preset management
-│   ├── settings.py          # Application settings
-│   ├── config.py            # Configuration & paths
-│   ├── autostart.py         # Windows startup integration
-│   ├── cli.py               # Command-line interface
-│   ├── theme.py             # Theme detection
-│   └── theme_colors.py      # Theme color definitions
-├── assets/
-│   └── icons/               # Application icons
-│       ├── app.ico
-│       └── icon_*.png
-├── scripts/                 # Build & utility scripts
-│   ├── build_exe.py
-│   ├── create_ico.py
-│   └── icon_generator.py
-├── docs/                    # Documentation
-│   ├── BUILD_INSTRUCTIONS.md
-│   └── CONTRIBUTING.md
-├── screenshots/             # Screenshots for documentation
-├── .github/workflows/       # CI/CD pipelines
-├── .gitignore
-├── LICENSE                  # MIT License
-├── MANIFEST.in
-├── README.md
-├── requirements.txt
-├── setup.iss                # Inno Setup installer script
-└── setup.py
+  display_presets/             Python backend
+    __main__.py                CLI entry point
+    server.py                  HTTP server for Electron
+    display_config.py          Windows Display Configuration API (ctypes)
+    displays.py                Current monitor info
+    store.py                   UUID-based preset CRUD
+    preset_service.py          Name-based preset CRUD (CLI)
+    settings.py                User preferences
+    config.py                  App data paths
+    autostart.py               Windows registry startup
+    logger.py                  File + stderr logging
+    cli.py                     CLI commands
+
+  electron-app/                Electron + React frontend
+    electron/
+      main.ts                  Main process, spawns Python backend
+      preload.ts               Context bridge (typed IPC API)
+    src/
+      pages/                   PresetsPage, DisplaysPage, SettingsPage, AboutPage
+      components/              MonitorCanvas, Sidebar, HotkeyInput, Toggle, etc.
+      stores/                  Zustand (presets, settings, app, toast)
+      types/                   TypeScript type definitions
+
+  assets/icons/                Source icon files
+  scripts/                     Build and icon generation scripts
+  docs/                        Contributing guide
+  .github/workflows/           CI/CD
 ```
 
-## Building from source
+## Data Storage
 
-See [docs/BUILD_INSTRUCTIONS.md](docs/BUILD_INSTRUCTIONS.md)
+All user data in `%APPDATA%\DisplayPresets\`:
 
-## Requirements
+- `presets/{uuid}.json` -- saved display configurations
+- `settings.json` -- app preferences
+- `debug.log` -- debug output
 
-- Windows 10/11
-- Python 3.8+ (for running from source)
-- No dependencies for compiled exe
+## CLI Usage
+
+```
+python -m display_presets <command>
+
+Commands:
+  list                  List all saved presets
+  apply <name>          Apply a preset
+  save <name>           Save current display config
+  delete <name>         Delete a preset
+  rename <old> <new>    Rename a preset
+  current               Show current display info
+  info <name>           Show preset details
+  --version             Show version
+```
+
+## Known Issues
+
+- All monitors from the preset must be physically connected when applying
+- Laptop docking stations may need a few seconds to stabilize before applying
+- Custom refresh rates set via GPU control panel may not be captured
+- Cannot override hardware or driver limitations
 
 ## License
 
-MIT - see [LICENSE](LICENSE)
-
-## Known issues
-
-- Won't work if monitors are disconnected (all monitors from the preset must be connected)
-- Some laptop docking stations need a few seconds to stabilize before applying presets
-- Cannot override hardware or driver limitations
-- Custom refresh rates set via GPU control panel may not be saved
-
-## User Interface
-
-### Main Dashboard
-- **Left panel**: List of all saved presets
-- **Right panel**: Visual preview showing monitor layout with positions and resolutions
-- **Bottom section**: Hotkey assignment for quick access
-- **Actions**: New, Apply, Rename, Delete buttons
-
-### System Tray Menu
-- **Dashboard**: Opens the main window
-- **Save current preset**: Quick save without opening dashboard
-- **Presets submenu**: Apply, Rename, or Delete any preset
-- **Exit**: Close the application
-
-### Themes
-- **Dark mode**: Windows 11 Fluent Design Dark theme
-- **Light mode**: Windows 11 Fluent Design Light theme
-- **System theme**: Automatically follows Windows theme setting
-
-The UI follows Windows 11 design language with modern colors, typography (Segoe UI Variable), and card-based layouts similar to PowerToys.
-
-## Troubleshooting
-
-**Preset won't apply:**
-- Make sure all monitors from the saved preset are currently connected
-- Try disconnecting and reconnecting monitors
-- Check if Windows Display Settings can manually set the configuration
-
-**Hotkey not working:**
-- Make sure the hotkey combination isn't already used by another application
-- Try a different key combination (e.g., Ctrl+Shift+F1 instead of Ctrl+Shift+1)
-- Check if the application is running in the system tray
-
-**App icon not showing:**
-- Make sure `app.ico` exists in the application folder
-- Try regenerating icons with `python icon_generator.py` and `python create_ico.py`
-
-## Contributing
-
-Contributions are welcome! This project started as a personal tool and has grown into a full-featured application.
-
-**How to contribute:**
-1. Fork the repository
-2. Create a feature branch (`git checkout -b feature/amazing-feature`)
-3. Make your changes
-4. Test thoroughly on Windows 10/11
-5. Commit your changes (`git commit -m 'Add amazing feature'`)
-6. Push to the branch (`git push origin feature/amazing-feature`)
-7. Open a Pull Request
-
-**Ideas for contributions:**
-- Support for display rotation in preview
-- Export/import presets to share with others
-- Display profile auto-switching based on connected monitors
-- Integration with Windows Task Scheduler for automatic preset application
-- Multi-language support
-
-## Changelog
-
-### Version 1.1.0
-- Interactive Edit Mode: drag monitors to rearrange, double-click to set primary
-- Duplicate preset with automatic extend mode conversion
-- CLI interface for scripting (`monitorsnap list/apply/save/delete/rename`)
-- Comprehensive Settings UI with categorized options
-- Simplified theme selector
-- Improved collision detection for monitor positioning
-
-### Version 1.0.0 (2026-01)
-- Initial public release
-- Save and restore display configurations
-- Global hotkey support
-- Visual monitor preview with sequential numbering and primary indicator (★)
-- Dark/Light/System theme support
-- Auto-start with Windows
-- System tray integration
+MIT -- see [LICENSE](LICENSE)

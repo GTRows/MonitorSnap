@@ -1,45 +1,52 @@
+# Python
 __pycache__/
 *.py[cod]
 *$py.class
 *.so
-.Python
-build/
-develop-eggs/
-dist/
-downloads/
-eggs/
-.eggs/
-lib/
-lib64/
-parts/
-sdist/
-var/
-wheels/
 *.egg-info/
-.installed.cfg
 *.egg
+.eggs/
+.Python
 
-*.spec
-error.log
-settings.json
-presets/
+# Build artifacts
+build/
+dist/
 installer/
+*.spec
 
+# IDE / editors
 .vscode/
 .idea/
-.claude/
 *.swp
 *.swo
 *~
 
-# Development files (local only)
-DEV.md
-dev.py
+# AI tools
+.claude/
+.agent/
+.codebuddy/
+.codex/
+.continue/
+.cursor/
+.gemini/
+.kiro/
+.opencode/
+.qoder/
+.roo/
+.trae/
+.windsurf/
 
-# Local test/run scripts
+# App runtime data
+settings.json
+error.log
+
+# Local dev scripts
 run_test.bat
 run_test.sh
 app_test.log
 
-# Claude Code project instructions (local only)
-CLAUDE.md
+# Electron
+electron-app/dist/
+electron-app/dist-electron/
+electron-app/node_modules/
+electron-app/release/

@@ -8,54 +8,39 @@ on:
 jobs:
   build-release:
     runs-on: windows-latest
-
     steps:
-    - uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
-    - name: Set up Python
-      uses: actions/setup-python@v5
-      with:
-        python-version: '3.11'
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
 
-    - name: Install dependencies
-      run: |
-        python -m pip install --upgrade pip
-        pip install -r requirements.txt
+      - name: Verify Python backend
+        run: python -c "from display_presets.server import main"
 
-    - name: Build executable
-      run: |
-        python scripts/build_exe.py
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
 
-    - name: Create portable zip
-      run: |
-        $version = "${{ github.ref_name }}"
-        Compress-Archive -Path "dist\MonitorSnap.exe" -DestinationPath "dist\MonitorSnap-$version-portable.zip"
-      shell: pwsh
+      - name: Install dependencies
+        working-directory: electron-app
+        run: npm ci
 
-    - name: Download Inno Setup
-      run: |
-        Invoke-WebRequest -Uri "https://jrsoftware.org/download.php/is.exe" -OutFile "innosetup.exe"
-        Start-Process -FilePath "innosetup.exe" -ArgumentList "/VERYSILENT /SUPPRESSMSGBOXES /NORESTART /SP-" -Wait
-      shell: pwsh
+      - name: Build Electron app
+        working-directory: electron-app
+        run: npm run electron:build
 
-    - name: Build installer
-      run: |
-        & "C:\Program Files (x86)\Inno Setup 6\ISCC.exe" setup.iss
-      shell: pwsh
+      - name: Create Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: electron-app/release/*.exe
+          body: |
+            ## DisplayPresets ${{ github.ref_name }}
 
-    - name: Create Release
-      uses: softprops/action-gh-release@v1
-      with:
-        files: |
-          dist/MonitorSnap-${{ github.ref_name }}-portable.zip
-          installer/MonitorSnapSetup-*.exe
-        body: |
-          ## MonitorSnap ${{ github.ref_name }}
-
-          Download options:
-          - **Setup Installer**: `MonitorSnapSetup-*.exe` (Recommended)
-          - **Portable**: `MonitorSnap-*-portable.zip` (No installation)
-        draft: false
-        prerelease: false
-      env:
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+            Download the installer (.exe) and run it. Python 3.10+ must be installed on the system.
+          draft: false
+          prerelease: false
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

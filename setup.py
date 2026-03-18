@@ -1,26 +1,19 @@
-"""Setup script for Display Presets."""
+"""Setup script for MonitorSnap."""
 
 from setuptools import setup, find_packages
 from pathlib import Path
 
-# Read the README file
-readme_file = Path(__file__).parent / "README.md"
-long_description = readme_file.read_text(encoding="utf-8") if readme_file.exists() else ""
-
-# Read requirements
-requirements_file = Path(__file__).parent / "requirements.txt"
-requirements = []
-if requirements_file.exists():
-    requirements = requirements_file.read_text().strip().split('\n')
+readme = Path(__file__).parent / "README.md"
+long_description = readme.read_text(encoding="utf-8") if readme.exists() else ""
 
 setup(
-    name="display-presets",
-    version="1.0.0",
-    author="Display Presets Contributors",
-    description="A modern Windows utility for saving and restoring monitor configurations",
+    name="monitorsnap",
+    version="2.0.0",
+    author="GTRows",
+    description="Save and restore Windows display configurations",
     long_description=long_description,
     long_description_content_type="text/markdown",
-    url="https://github.com/yourusername/DisplayPresets",
+    url="https://github.com/GTRows/MonitorSnap",
     packages=find_packages(),
     classifiers=[
         "Development Status :: 4 - Beta",
@@ -28,17 +21,15 @@ setup(
         "Topic :: Desktop Environment",
         "License :: OSI Approved :: MIT License",
         "Programming Language :: Python :: 3",
-        "Programming Language :: Python :: 3.8",
-        "Programming Language :: Python :: 3.9",
         "Programming Language :: Python :: 3.10",
         "Programming Language :: Python :: 3.11",
+        "Programming Language :: Python :: 3.12",
         "Operating System :: Microsoft :: Windows",
     ],
-    python_requires=">=3.8",
-    install_requires=requirements,
+    python_requires=">=3.10",
+    install_requires=[],
     entry_points={
         "console_scripts": [
-            "display-presets=display_presets.__main__:main",
             "monitorsnap=display_presets.__main__:main",
         ],
     },

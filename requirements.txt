@@ -1,2 +1,5 @@
-PyQt6>=6.7.0
-pyinstaller>=6.10.0
+# The Python backend uses only the standard library (ctypes, json, http.server).
+# No pip dependencies required at runtime.
+#
+# Build-time only (optional):
+# pyinstaller>=6.10.0

@@ -2,7 +2,7 @@
 ; Requires Inno Setup 6.0 or later (https://jrsoftware.org/isdl.php)
 
 #define MyAppName "MonitorSnap"
-#define MyAppVersion "1.1.0"
+#define MyAppVersion "2.0.0"
 #define MyAppPublisher "GTRows"
 #define MyAppURL "https://github.com/GTRows/MonitorSnap"
 #define MyAppExeName "MonitorSnap.exe"
