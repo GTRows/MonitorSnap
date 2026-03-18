@@ -50,7 +50,14 @@ Before submitting a PR:
 
 ## Pull Requests
 
-1. Fork and create a feature branch
-2. Make changes
-3. Test thoroughly
-4. Submit PR with clear description
+1. Fork the repo and clone it
+2. Create your branch from `develop` (not `main`):
+   ```bash
+   git checkout develop
+   git checkout -b feature/my-feature
+   ```
+3. Make your changes and commit
+4. Push and open a PR targeting `develop`
+5. After review, the maintainer merges into `develop`
+
+Do not open PRs directly into `main`. Releases are cut from `develop` into `main` by the maintainer.

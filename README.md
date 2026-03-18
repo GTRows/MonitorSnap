@@ -8,10 +8,10 @@ Primary use case: KVM switch users who need to instantly switch between differen
 
 - Save and restore complete display configurations
 - Visual monitor layout preview with drag-to-rearrange editing
-- Global hotkeys for instant preset switching
 - System tray with quick-apply menu
 - Dark / Light / System theme (Windows 11 Fluent Design)
 - Auto-start with Windows
+- Export / Import presets
 - CLI interface for scripting
 
 ## What Gets Saved
@@ -29,7 +29,7 @@ Each preset captures the full display state via Windows Display Configuration AP
 
 ### From Source
 
-Requirements: Windows 10/11, Python 3.10+, Node.js 20+
+Requirements: Windows 11, Python 3.10+, Node.js 20+
 
 ```bash
 git clone https://github.com/GTRows/MonitorSnap.git
@@ -104,14 +104,16 @@ MonitorSnap/
       preload.ts               Context bridge (typed IPC API)
     src/
       pages/                   PresetsPage, DisplaysPage, SettingsPage, AboutPage
-      components/              MonitorCanvas, Sidebar, HotkeyInput, Toggle, etc.
+      components/              MonitorCanvas, MonitorEditPanel, Sidebar, HotkeyInput,
+                               Toggle, ConfirmDialog, ContextMenu, Tooltip, Toast
       stores/                  Zustand (presets, settings, app, toast)
+      lib/                     Utilities (openLink, constants)
       types/                   TypeScript type definitions
 
   assets/icons/                Source icon files
-  scripts/                     Build and icon generation scripts
-  docs/                        Contributing guide
-  .github/workflows/           CI/CD
+  scripts/                     Icon generation (generate_icons.py)
+  docs/                        UI feature spec
+  .github/workflows/           CI/CD (build + release)
 ```
 
 ## Data Storage
@@ -137,6 +139,54 @@ Commands:
   info <name>           Show preset details
   --version             Show version
 ```
+
+## Branch Strategy
+
+```
+main                Stable releases only. Every commit is tagged (v2.0.0, v2.1.0, ...).
+ \
+  develop           Integration branch. Tested features land here first.
+   \
+    feature/xxx     Short-lived branches for individual features or fixes.
+```
+
+### Rules
+
+- **`main`** -- Production. Only receives merges from `develop` when cutting a release. Always tagged.
+- **`develop`** -- Staging area. All feature work merges here after testing. Must stay buildable.
+- **`feature/*`** -- Created from `develop`, merged back into `develop` via PR. Deleted after merge.
+
+### Workflow
+
+```bash
+# Start a new feature
+git checkout develop
+git pull origin develop
+git checkout -b feature/my-feature
+
+# Work, commit, push
+git push -u origin feature/my-feature
+
+# When done: open PR into develop, review, merge, delete branch.
+# When releasing: merge develop into main, tag, push.
+```
+
+### Hotfix
+
+For urgent fixes on a released version:
+
+```bash
+git checkout main
+git checkout -b hotfix/fix-description
+# fix, commit, PR into main AND develop
+```
+
+## Roadmap
+
+Planned features for upcoming releases:
+
+- **Auto-update** -- Check for new versions on startup, download and install updates automatically via GitHub Releases
+- **Localization** -- Multi-language UI support (English, Turkish, and community translations)
 
 ## Known Issues
 
