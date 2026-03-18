@@ -66,7 +66,7 @@ procedure CurStepChanged(CurStep: TSetupStep);
 var
   ResultCode: Integer;
 begin
-  if CurStep = ssPrepare then
+  if CurStep = ssPreInstall then
   begin
     // Kill any running instances before installation begins
     Exec('taskkill', '/F /IM ' + '{#MyAppExeName}', '', SW_HIDE, ewWaitUntilTerminated, ResultCode);
