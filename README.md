@@ -138,6 +138,47 @@ Commands:
   --version             Show version
 ```
 
+## Branch Strategy
+
+```
+main                Stable releases only. Every commit is tagged (v2.0.0, v2.1.0, ...).
+ \
+  develop           Integration branch. Tested features land here first.
+   \
+    feature/xxx     Short-lived branches for individual features or fixes.
+```
+
+### Rules
+
+- **`main`** -- Production. Only receives merges from `develop` when cutting a release. Always tagged.
+- **`develop`** -- Staging area. All feature work merges here after testing. Must stay buildable.
+- **`feature/*`** -- Created from `develop`, merged back into `develop` via PR. Deleted after merge.
+
+### Workflow
+
+```bash
+# Start a new feature
+git checkout develop
+git pull origin develop
+git checkout -b feature/my-feature
+
+# Work, commit, push
+git push -u origin feature/my-feature
+
+# When done: open PR into develop, review, merge, delete branch.
+# When releasing: merge develop into main, tag, push.
+```
+
+### Hotfix
+
+For urgent fixes on a released version:
+
+```bash
+git checkout main
+git checkout -b hotfix/fix-description
+# fix, commit, PR into main AND develop
+```
+
 ## Known Issues
 
 - All monitors from the preset must be physically connected when applying
