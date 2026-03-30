@@ -2,7 +2,7 @@ import { useState, useCallback, useMemo, useRef, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   Play, Pencil, Copy, Trash2, Plus, Keyboard, Check, X,
-  Save, RotateCcw, Settings2, MonitorCheck, GripVertical, Search, Undo2, Redo2,
+  Save, RotateCcw, MonitorCheck, GripVertical, Search, Undo2, Redo2,
   ChevronUp, ChevronDown, ChevronsUpDown,
 } from 'lucide-react';
 import { usePresetStore } from '@/stores/presetStore';
@@ -344,8 +344,6 @@ export function PresetsPage() {
         startRename(selectedPreset);
       } else if (e.key === 'Enter' && selectedPresetId) {
         applyPreset(selectedPresetId);
-      } else if (e.key === 'e' && selectedPreset && !e.ctrlKey && !e.altKey) {
-        enterEditMode(selectedPreset);
       } else if (e.key === 'd' && selectedPresetId && !e.ctrlKey && !e.altKey) {
         duplicatePreset(selectedPresetId);
       }
@@ -609,14 +607,6 @@ export function PresetsPage() {
                         Apply
                       </button>
                       <button
-                        onClick={() => enterEditMode(selectedPreset)}
-                        className="flex items-center gap-1.5 px-3 py-1.5 rounded-fluent text-body text-text-secondary hover:text-text-primary hover:bg-[var(--nav-hover-bg)] transition-colors duration-150 cursor-pointer"
-                        title="Edit preset"
-                      >
-                        <Settings2 size={15} />
-                        Edit
-                      </button>
-                      <button
                         onClick={() => duplicatePreset(selectedPreset.id)}
                         className="p-1.5 rounded-fluent text-text-secondary hover:text-text-primary hover:bg-[var(--nav-hover-bg)] transition-colors duration-150 cursor-pointer"
                         title="Duplicate"
@@ -819,7 +809,6 @@ export function PresetsPage() {
           onClose={() => setContextMenu(null)}
           items={[
             { label: 'Apply', icon: <Play size={14} />, onClick: () => applyPreset(contextMenu.preset.id) },
-            { label: 'Edit', icon: <Settings2 size={14} />, onClick: () => { selectPreset(contextMenu.preset.id); enterEditMode(contextMenu.preset); } },
             { label: 'Rename', icon: <Pencil size={14} />, onClick: () => startRename(contextMenu.preset) },
             { label: 'Duplicate', icon: <Copy size={14} />, onClick: () => duplicatePreset(contextMenu.preset.id) },
             { label: '', onClick: () => {}, separator: true },

@@ -67,6 +67,7 @@ interface PresetState {
   reorderPresets: (ids: string[]) => void;
   exportPresets: () => void;
   importPresets: () => void;
+  clearAllPresets: () => Promise<void>;
 }
 
 export const usePresetStore = create<PresetState>((set, get) => ({
@@ -306,6 +307,21 @@ export const usePresetStore = create<PresetState>((set, get) => ({
       reader.readAsText(file);
     };
     input.click();
+  },
+
+  clearAllPresets: async () => {
+    const { presets } = get();
+    if (useMock) {
+      set({ presets: [], selectedPresetId: null });
+      toast.success(`Cleared ${presets.length} preset${presets.length !== 1 ? 's' : ''}`);
+      return;
+    }
+    for (const p of presets) {
+      await api.deletePreset(p.id);
+    }
+    set({ presets: [], selectedPresetId: null });
+    if (api) api.updateTrayPresets([]);
+    toast.success(`Cleared ${presets.length} preset${presets.length !== 1 ? 's' : ''}`);
   },
 
   setHotkey: async (presetId, hotkey) => {

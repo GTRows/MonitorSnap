@@ -103,12 +103,6 @@ export function DisplaysPage() {
                 <FilePlus size={14} />
                 Save as Preset
               </button>
-              <button
-                onClick={enterEditMode}
-                className="flex items-center gap-1.5 px-3 py-1.5 rounded-fluent bg-accent text-[#000] text-body font-medium hover:bg-accent-hover transition-colors duration-150 cursor-pointer"
-              >
-                Edit Layout
-              </button>
             </>
           )}
         </div>
