@@ -1,6 +1,7 @@
-import { app, BrowserWindow, ipcMain, Tray, Menu, nativeImage, nativeTheme, shell } from 'electron';
+import { app, BrowserWindow, ipcMain, Tray, Menu, nativeImage, nativeTheme, shell, globalShortcut } from 'electron';
 import { spawn, ChildProcess } from 'child_process';
 import * as path from 'path';
+import { toAccelerator } from './hotkey';
 
 let mainWindow: BrowserWindow | null = null;
 let tray: Tray | null = null;
@@ -83,6 +84,33 @@ function apiPatch(urlPath: string, data: unknown) {
 
 function apiDelete(urlPath: string) {
   return api(urlPath, { method: 'DELETE' });
+}
+
+// ---------------------------------------------------------------------------
+// Global hotkeys
+// ---------------------------------------------------------------------------
+
+async function registerAllHotkeys(): Promise<void> {
+  globalShortcut.unregisterAll();
+  try {
+    const presets = await api('/presets') as Array<{ id: string; hotkey: string | null; name: string }>;
+    for (const p of presets) {
+      if (!p.hotkey) continue;
+      const accel = toAccelerator(p.hotkey);
+      if (!accel) {
+        console.warn(`[hotkey] Cannot register "${p.hotkey}" for preset "${p.name}": unsupported key`);
+        continue;
+      }
+      const ok = globalShortcut.register(accel, () => {
+        apiPost(`/presets/${p.id}/apply`).catch((e) => console.error('[hotkey] apply failed:', e));
+      });
+      if (!ok) {
+        console.warn(`[hotkey] Failed to register "${accel}" for preset "${p.name}" (may be taken by another app)`);
+      }
+    }
+  } catch (e) {
+    console.error('[hotkey] Could not load presets for registration:', e);
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -251,6 +279,7 @@ function registerIpcHandlers(): void {
   ipcMain.handle('update-preset', async (_event, presetId: string, data: unknown) => {
     try {
       await apiPut(`/presets/${presetId}`, data);
+      await registerAllHotkeys();
       return { success: true };
     } catch (e) {
       return { success: false, error: String(e) };
@@ -260,6 +289,7 @@ function registerIpcHandlers(): void {
   ipcMain.handle('delete-preset', async (_event, presetId: string) => {
     try {
       await apiDelete(`/presets/${presetId}`);
+      await registerAllHotkeys();
       return { success: true };
     } catch (e) {
       return { success: false, error: String(e) };
@@ -287,6 +317,7 @@ function registerIpcHandlers(): void {
   ipcMain.handle('set-hotkey', async (_event, presetId: string, hotkey: string | null) => {
     try {
       await apiPatch(`/presets/${presetId}/hotkey`, { hotkey });
+      await registerAllHotkeys();
       return { success: true };
     } catch (e) {
       return { success: false, error: String(e) };
@@ -343,6 +374,7 @@ app.whenReady().then(async () => {
   try {
     await startPythonBackend();
     console.log(`Python backend ready on port ${backendPort}`);
+    await registerAllHotkeys();
   } catch (err) {
     console.error('Python backend failed to start:', err);
     // App continues — frontend will use mock data (window.api returns empty arrays)
@@ -360,10 +392,15 @@ app.on('activate', () => {
 });
 
 app.on('before-quit', () => {
+  globalShortcut.unregisterAll();
   if (pythonProcess) {
     pythonProcess.kill();
     pythonProcess = null;
   }
+});
+
+app.on('will-quit', () => {
+  globalShortcut.unregisterAll();
 });
 
 nativeTheme.on('updated', () => {

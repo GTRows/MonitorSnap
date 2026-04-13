@@ -10,6 +10,7 @@ permissions:
 
 jobs:
   build-release:
+    name: Build and release
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v4
@@ -20,7 +21,9 @@ jobs:
           python-version: '3.11'
 
       - name: Verify Python backend
-        run: python -c "from display_presets.server import main"
+        run: |
+          python -m py_compile display_presets/server.py
+          python -c "from display_presets.server import main; from display_presets.cli import run_cli"
 
       - name: Set up Node.js
         uses: actions/setup-node@v4
@@ -30,6 +33,30 @@ jobs:
       - name: Install dependencies
         working-directory: electron-app
         run: npm ci
+
+      - name: TypeScript check
+        working-directory: electron-app
+        run: npx tsc --noEmit
+
+      - name: Run Python tests
+        shell: bash
+        run: |
+          if [ -d "tests" ] && ls tests/test_*.py tests/*_test.py 2>/dev/null | head -1 > /dev/null 2>&1; then
+            pip install pytest
+            python -m pytest tests/ -v
+          else
+            echo "No Python tests found, skipping"
+          fi
+
+      - name: Run frontend tests
+        working-directory: electron-app
+        shell: bash
+        run: |
+          if node -e "const p = require('./package.json'); process.exit(p.scripts && p.scripts.test ? 0 : 1)" 2>/dev/null; then
+            npm test
+          else
+            echo "No frontend test script found, skipping"
+          fi
 
       - name: Build Electron app
         working-directory: electron-app

@@ -187,6 +187,7 @@ Planned features for upcoming releases:
 
 - **Auto-update** -- Check for new versions on startup, download and install updates automatically via GitHub Releases
 - **Localization** -- Multi-language UI support (English, Turkish, and community translations)
+- **Tests** -- Unit and integration tests for both Python backend (pytest) and Electron frontend
 
 ## Known Issues
 

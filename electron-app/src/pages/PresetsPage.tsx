@@ -6,6 +6,7 @@ import {
   ChevronUp, ChevronDown, ChevronsUpDown,
 } from 'lucide-react';
 import { usePresetStore } from '@/stores/presetStore';
+import { useSettingsStore } from '@/stores/settingsStore';
 import { MonitorCanvas } from '@/components/MonitorCanvas';
 import { MonitorEditPanel } from '@/components/MonitorEditPanel';
 import { HotkeyInput } from '@/components/HotkeyInput';
@@ -84,6 +85,8 @@ export function PresetsPage() {
       .map((p) => p.hotkey as string),
     [presets, selectedPresetId]
   );
+
+  const editModeEnabled = useSettingsStore((s) => s.settings.enableEditMode);
 
   // Full edit mode state
   const [editMode, setEditMode] = useState(false);
@@ -344,7 +347,7 @@ export function PresetsPage() {
         startRename(selectedPreset);
       } else if (e.key === 'Enter' && selectedPresetId) {
         applyPreset(selectedPresetId);
-      } else if (e.key === 'e' && selectedPreset && !e.ctrlKey && !e.altKey) {
+      } else if (e.key === 'e' && editModeEnabled && selectedPreset && !e.ctrlKey && !e.altKey) {
         enterEditMode(selectedPreset);
       } else if (e.key === 'd' && selectedPresetId && !e.ctrlKey && !e.altKey) {
         duplicatePreset(selectedPresetId);
@@ -352,7 +355,7 @@ export function PresetsPage() {
     };
     window.addEventListener('keydown', handler);
     return () => window.removeEventListener('keydown', handler);
-  }, [editMode, hasChanges, layoutValid, selectedPresetId, selectedPreset, presets,
+  }, [editMode, editModeEnabled, hasChanges, layoutValid, selectedPresetId, selectedPreset, presets,
     handleUndo, handleRedo, exitEditMode, handleSaveEdit, applyPreset, enterEditMode,
     duplicatePreset]);
 
@@ -608,14 +611,16 @@ export function PresetsPage() {
                         <Play size={14} />
                         Apply
                       </button>
-                      <button
-                        onClick={() => enterEditMode(selectedPreset)}
-                        className="flex items-center gap-1.5 px-3 py-1.5 rounded-fluent text-body text-text-secondary hover:text-text-primary hover:bg-[var(--nav-hover-bg)] transition-colors duration-150 cursor-pointer"
-                        title="Edit preset"
-                      >
-                        <Settings2 size={15} />
-                        Edit
-                      </button>
+                      {editModeEnabled && (
+                        <button
+                          onClick={() => enterEditMode(selectedPreset)}
+                          className="flex items-center gap-1.5 px-3 py-1.5 rounded-fluent text-body text-text-secondary hover:text-text-primary hover:bg-[var(--nav-hover-bg)] transition-colors duration-150 cursor-pointer"
+                          title="Edit preset"
+                        >
+                          <Settings2 size={15} />
+                          Edit
+                        </button>
+                      )}
                       <button
                         onClick={() => duplicatePreset(selectedPreset.id)}
                         className="p-1.5 rounded-fluent text-text-secondary hover:text-text-primary hover:bg-[var(--nav-hover-bg)] transition-colors duration-150 cursor-pointer"
@@ -819,7 +824,7 @@ export function PresetsPage() {
           onClose={() => setContextMenu(null)}
           items={[
             { label: 'Apply', icon: <Play size={14} />, onClick: () => applyPreset(contextMenu.preset.id) },
-            { label: 'Edit', icon: <Settings2 size={14} />, onClick: () => { selectPreset(contextMenu.preset.id); enterEditMode(contextMenu.preset); } },
+            ...(editModeEnabled ? [{ label: 'Edit', icon: <Settings2 size={14} />, onClick: () => { selectPreset(contextMenu.preset.id); enterEditMode(contextMenu.preset); } }] : []),
             { label: 'Rename', icon: <Pencil size={14} />, onClick: () => startRename(contextMenu.preset) },
             { label: 'Duplicate', icon: <Copy size={14} />, onClick: () => duplicatePreset(contextMenu.preset.id) },
             { label: '', onClick: () => {}, separator: true },

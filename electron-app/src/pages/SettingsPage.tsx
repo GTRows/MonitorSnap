@@ -1,8 +1,10 @@
+import { useState } from 'react';
 import { motion } from 'framer-motion';
-import { Sun, Moon, Monitor, Download, Upload, RotateCcw } from 'lucide-react';
+import { Sun, Moon, Monitor, Download, Upload, RotateCcw, Trash2, FlaskConical } from 'lucide-react';
 import { useSettingsStore } from '@/stores/settingsStore';
 import { usePresetStore } from '@/stores/presetStore';
 import { Toggle } from '@/components/Toggle';
+import { ConfirmDialog } from '@/components/ConfirmDialog';
 
 function SectionHeader({ title }: { title: string }) {
   return (
@@ -24,7 +26,8 @@ function SettingRow({ label, description, children }: { label: string; descripti
 
 export function SettingsPage() {
   const { settings, updateSettings, resetSettings } = useSettingsStore();
-  const { exportPresets, importPresets } = usePresetStore();
+  const { presets, exportPresets, importPresets, clearAllPresets } = usePresetStore();
+  const [showFactoryReset, setShowFactoryReset] = useState(false);
 
   return (
     <motion.div
@@ -167,7 +170,67 @@ export function SettingsPage() {
             </div>
           </div>
         </div>
+
+        {/* Beta Features */}
+        <SectionHeader title="Beta Features" />
+        <div className="rounded-fluent-lg border border-amber-500/30 overflow-hidden">
+          <div className="px-4 py-3 bg-amber-500/5 border-b border-amber-500/20">
+            <div className="flex items-start gap-2">
+              <FlaskConical size={14} className="text-amber-400 mt-0.5 shrink-0" />
+              <p className="text-caption text-text-tertiary">
+                Experimental features may be unstable or change without notice. Enable at your own risk.
+              </p>
+            </div>
+          </div>
+          <div className="px-4">
+            <SettingRow
+              label="Edit preset layouts"
+              description="Drag monitors in presets and the Displays page to tweak position and size. Known to occasionally misbehave with unusual configurations."
+            >
+              <Toggle
+                checked={settings.enableEditMode}
+                onChange={(v) => updateSettings({ enableEditMode: v })}
+              />
+            </SettingRow>
+          </div>
+        </div>
+
+        {/* Danger Zone */}
+        <SectionHeader title="Danger Zone" />
+        <div className="rounded-fluent-lg border border-red-500/30 overflow-hidden">
+          <div className="px-4 py-3">
+            <div className="flex items-center justify-between">
+              <div className="mr-4">
+                <p className="text-body text-text-primary">Factory Reset</p>
+                <p className="text-caption text-text-tertiary mt-0.5">
+                  Delete all presets and reset settings to defaults
+                </p>
+              </div>
+              <button
+                onClick={() => setShowFactoryReset(true)}
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-fluent text-body bg-red-500/10 border border-red-500/30 text-red-400 hover:bg-red-500/20 transition-colors cursor-pointer"
+              >
+                <Trash2 size={14} />
+                Factory Reset
+              </button>
+            </div>
+          </div>
+        </div>
       </div>
+
+      <ConfirmDialog
+        open={showFactoryReset}
+        title="Factory Reset"
+        message={`This will delete all ${presets.length} preset${presets.length !== 1 ? 's' : ''} and reset all settings to defaults. This cannot be undone.`}
+        confirmLabel="Reset Everything"
+        danger
+        onConfirm={async () => {
+          await clearAllPresets();
+          await resetSettings();
+          setShowFactoryReset(false);
+        }}
+        onCancel={() => setShowFactoryReset(false)}
+      />
     </motion.div>
   );
 }

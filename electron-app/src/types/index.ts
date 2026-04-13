@@ -32,6 +32,7 @@ export interface Settings {
   escToMinimize: boolean;
   notifications: boolean;
   fontScale: number;
+  enableEditMode: boolean;
 }
 
 export type Page = 'presets' | 'displays' | 'settings' | 'about';

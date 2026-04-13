@@ -45,6 +45,9 @@ class Settings:
         self.window_width = 1100
         self.window_height = 700
 
+        # Beta Features
+        self.enable_edit_mode = False
+
         # Internal state (not saved, runtime only)
         self.last_selected_preset = None
 
@@ -80,6 +83,9 @@ class Settings:
                     self.window_width = data.get('window_width', 1100)
                     self.window_height = data.get('window_height', 700)
 
+                    # Beta Features
+                    self.enable_edit_mode = data.get('enable_edit_mode', False)
+
                     # Runtime state
                     self.last_selected_preset = data.get('last_selected_preset', None)
             except (json.JSONDecodeError, OSError):
@@ -111,6 +117,9 @@ class Settings:
                 'font_size_multiplier': self.font_size_multiplier,
                 'window_width': self.window_width,
                 'window_height': self.window_height,
+
+                # Beta Features
+                'enable_edit_mode': self.enable_edit_mode,
 
                 # Runtime state
                 'last_selected_preset': self.last_selected_preset,
@@ -148,6 +157,9 @@ class Settings:
         self.font_size_multiplier = 1.0
         self.window_width = 1100
         self.window_height = 700
+
+        # Beta Features
+        self.enable_edit_mode = False
 
         # Runtime state
         self.last_selected_preset = None

@@ -39,6 +39,7 @@ def _settings_to_dict(s: Settings) -> dict:
         'escToMinimize': s.esc_to_minimize,
         'notifications': s.notify_preset_applied,
         'fontScale': s.font_size_multiplier,
+        'enableEditMode': s.enable_edit_mode,
     }
 
 
@@ -273,6 +274,8 @@ class _Handler(BaseHTTPRequestHandler):
                 _settings.notify_preset_applied = body['notifications']
             if 'fontScale' in body:
                 _settings.font_size_multiplier = body['fontScale']
+            if 'enableEditMode' in body:
+                _settings.enable_edit_mode = body['enableEditMode']
             _settings.save()
             self._json(_settings_to_dict(_settings))
 
