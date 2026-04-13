@@ -23,6 +23,7 @@ const defaultSettings: Settings = {
   escToMinimize: true,
   notifications: true,
   fontScale: 1.0,
+  enableEditMode: false,
 };
 
 export const useSettingsStore = create<SettingsState>((set, get) => ({

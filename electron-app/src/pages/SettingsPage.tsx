@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { motion } from 'framer-motion';
-import { Sun, Moon, Monitor, Download, Upload, RotateCcw, Trash2 } from 'lucide-react';
+import { Sun, Moon, Monitor, Download, Upload, RotateCcw, Trash2, FlaskConical } from 'lucide-react';
 import { useSettingsStore } from '@/stores/settingsStore';
 import { usePresetStore } from '@/stores/presetStore';
 import { Toggle } from '@/components/Toggle';
@@ -168,6 +168,30 @@ export function SettingsPage() {
                 Reset All Settings
               </button>
             </div>
+          </div>
+        </div>
+
+        {/* Beta Features */}
+        <SectionHeader title="Beta Features" />
+        <div className="rounded-fluent-lg border border-amber-500/30 overflow-hidden">
+          <div className="px-4 py-3 bg-amber-500/5 border-b border-amber-500/20">
+            <div className="flex items-start gap-2">
+              <FlaskConical size={14} className="text-amber-400 mt-0.5 shrink-0" />
+              <p className="text-caption text-text-tertiary">
+                Experimental features may be unstable or change without notice. Enable at your own risk.
+              </p>
+            </div>
+          </div>
+          <div className="px-4">
+            <SettingRow
+              label="Edit preset layouts"
+              description="Drag monitors in presets and the Displays page to tweak position and size. Known to occasionally misbehave with unusual configurations."
+            >
+              <Toggle
+                checked={settings.enableEditMode}
+                onChange={(v) => updateSettings({ enableEditMode: v })}
+              />
+            </SettingRow>
           </div>
         </div>
 

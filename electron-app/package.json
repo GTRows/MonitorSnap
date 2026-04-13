@@ -1,6 +1,6 @@
 {
   "name": "display-presets",
-  "version": "2.1.0",
+  "version": "2.2.0",
   "description": "Save and restore monitor configurations instantly",
   "main": "dist-electron/main.js",
   "scripts": {
@@ -8,7 +8,8 @@
     "build": "tsc && vite build && tsc -p tsconfig.electron.json",
     "preview": "vite preview",
     "electron:dev": "concurrently \"vite\" \"wait-on http://localhost:5173 && tsc -p tsconfig.electron.json && electron .\"",
-    "electron:build": "npm run build && electron-builder"
+    "electron:build": "npm run build && electron-builder",
+    "test": "vitest run"
   },
   "dependencies": {
     "framer-motion": "^11.18.0",
@@ -29,6 +30,7 @@
     "tailwindcss": "^3.4.17",
     "typescript": "^5.7.0",
     "vite": "^6.0.0",
+    "vitest": "^4.1.4",
     "wait-on": "^8.0.0"
   },
   "build": {

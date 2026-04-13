@@ -1,32 +1,12 @@
 import { useState, useCallback, useRef } from 'react';
 import { X, Keyboard, AlertTriangle } from 'lucide-react';
+import { formatKeyCombo } from '@/lib/hotkey';
 
 interface HotkeyInputProps {
   value: string | null;
   onChange: (hotkey: string | null) => void;
   existingHotkeys?: string[];
   className?: string;
-}
-
-function formatKeyCombo(e: KeyboardEvent): string | null {
-  const parts: string[] = [];
-  if (e.ctrlKey) parts.push('Ctrl');
-  if (e.altKey) parts.push('Alt');
-  if (e.shiftKey) parts.push('Shift');
-  if (e.metaKey) parts.push('Win');
-
-  const key = e.key;
-  if (['Control', 'Alt', 'Shift', 'Meta'].includes(key)) return null;
-
-  if (key.length === 1) {
-    parts.push(key.toUpperCase());
-  } else {
-    parts.push(key);
-  }
-
-  if (parts.length < 2) return null;
-
-  return parts.join('+');
 }
 
 export function HotkeyInput({ value, onChange, existingHotkeys = [], className = '' }: HotkeyInputProps) {
