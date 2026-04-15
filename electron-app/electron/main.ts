@@ -1,4 +1,4 @@
-import { app, BrowserWindow, ipcMain, Tray, Menu, nativeImage, nativeTheme, shell, globalShortcut } from 'electron';
+import { app, BrowserWindow, ipcMain, Tray, Menu, nativeImage, nativeTheme, shell, globalShortcut, dialog } from 'electron';
 import { spawn, ChildProcess } from 'child_process';
 import * as path from 'path';
 import { toAccelerator } from './hotkey';
@@ -14,13 +14,30 @@ const isDev = process.env.NODE_ENV !== 'production' || !app.isPackaged;
 // Python backend
 // ---------------------------------------------------------------------------
 
+function resolveBackendCwd(): string {
+  // In dev, the Python package sits two levels up from dist-electron/.
+  // In a packaged app, we ship display_presets/ via extraResources so it
+  // lives next to app.asar under process.resourcesPath.
+  if (app.isPackaged) {
+    return process.resourcesPath;
+  }
+  return path.join(__dirname, '../../');
+}
+
+function resolvePythonCommand(): string {
+  // Let users override if their python isn't on PATH or is named differently.
+  if (process.env.DISPLAYPRESETS_PYTHON) return process.env.DISPLAYPRESETS_PYTHON;
+  return process.platform === 'win32' ? 'python' : 'python3';
+}
+
 function startPythonBackend(): Promise<number> {
   return new Promise((resolve, reject) => {
-    // Project root is two levels up from dist-electron/
-    const projectRoot = path.join(__dirname, '../../');
+    const cwd = resolveBackendCwd();
+    const pythonCmd = resolvePythonCommand();
+    let stderrBuffer = '';
 
-    const proc = spawn('python', ['-m', 'display_presets.server'], {
-      cwd: projectRoot,
+    const proc = spawn(pythonCmd, ['-m', 'display_presets.server'], {
+      cwd,
       env: process.env,
       windowsHide: true,
     });
@@ -37,23 +54,29 @@ function startPythonBackend(): Promise<number> {
     });
 
     proc.stderr?.on('data', (data: Buffer) => {
-      console.error('[python]', data.toString().trimEnd());
+      const text = data.toString();
+      stderrBuffer += text;
+      console.error('[python]', text.trimEnd());
     });
 
     proc.on('error', (err) => {
       console.error('Failed to start Python backend:', err);
-      reject(err);
+      reject(new Error(`${err.message} (tried '${pythonCmd}' in ${cwd})`));
     });
 
     proc.on('exit', (code) => {
       console.log(`Python backend exited (code ${code})`);
       pythonProcess = null;
       backendPort = null;
+      if (backendPort === null && code !== 0 && code !== null) {
+        const snippet = stderrBuffer.trim().split('\n').slice(-5).join('\n');
+        reject(new Error(`Python backend exited with code ${code}.\n${snippet}`));
+      }
     });
 
     setTimeout(() => {
       if (backendPort === null) {
-        reject(new Error('Python backend startup timed out after 15s'));
+        reject(new Error(`Python backend startup timed out after 15s (cwd: ${cwd})`));
       }
     }, 15000);
   });
@@ -377,7 +400,12 @@ app.whenReady().then(async () => {
     await registerAllHotkeys();
   } catch (err) {
     console.error('Python backend failed to start:', err);
-    // App continues — frontend will use mock data (window.api returns empty arrays)
+    dialog.showErrorBox(
+      'DisplayPresets backend failed to start',
+      `The Python backend could not be launched. The app will not be able to save or apply presets.\n\n` +
+      `Make sure Python 3.10+ is installed and available on PATH.\n\n` +
+      `Details:\n${err instanceof Error ? err.message : String(err)}`
+    );
   }
 });
 
