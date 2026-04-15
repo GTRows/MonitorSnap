@@ -50,6 +50,14 @@ const api = {
   getTheme: (): Promise<'dark' | 'light'> => ipcRenderer.invoke('get-theme'),
   updateTrayPresets: (presets: Array<{ id: string; name: string }>): Promise<{ success: boolean }> => ipcRenderer.invoke('update-tray-presets', presets),
   openExternal: (url: string): Promise<void> => ipcRenderer.invoke('open-external', url),
+  getBackendStatus: (): Promise<{ ready: boolean; error: string | null }> => ipcRenderer.invoke('get-backend-status'),
+  restartBackend: (): Promise<{ success: boolean; error?: string }> => ipcRenderer.invoke('restart-backend'),
+
+  onBackendStatusChanged: (callback: (status: { ready: boolean; error: string | null }) => void) => {
+    const handler = (_event: Electron.IpcRendererEvent, status: { ready: boolean; error: string | null }) => callback(status);
+    ipcRenderer.on('backend-status-changed', handler);
+    return () => ipcRenderer.removeListener('backend-status-changed', handler);
+  },
 
   onThemeChanged: (callback: (theme: 'dark' | 'light') => void) => {
     const handler = (_event: Electron.IpcRendererEvent, theme: 'dark' | 'light') => callback(theme);
