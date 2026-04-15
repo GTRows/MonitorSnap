@@ -76,3 +76,30 @@ All user data in `%APPDATA%\DisplayPresets\`:
 ## Build Notes
 
 Windows-only due to ctypes bindings to `user32.dll` Display Configuration API. The Python backend has zero pip dependencies (stdlib only).
+
+## Release Standards
+
+Every release MUST produce both of the following artifacts, uploaded to the GitHub release:
+
+1. **Installer** — `DisplayPresets-Setup-<version>.exe` (NSIS, per-user, creates Start Menu entry and uninstaller).
+2. **Portable** — `DisplayPresets-Portable-<version>.exe` (single-file executable, no install).
+
+Both targets are configured in `electron-app/package.json` under `build.win.target`. Do not remove either target. `.github/workflows/release.yml` uploads everything matching `electron-app/release/*.exe`.
+
+### Release notes
+
+Release notes are generated automatically in the workflow from the git log between the previous tag and the new one. They must include, as section headings:
+
+- **Downloads** — describe Installer vs Portable so users can pick.
+- **Requirements** — Windows version, Python 3.10+ on PATH.
+- **Changes** — bullet list of commit subjects (merge commits filtered out), followed by a `Full changelog` compare link.
+
+When cutting a release, verify after the workflow finishes that both `.exe` files are attached to the GitHub release and the notes render correctly. If either is missing, investigate the workflow before tagging the next version.
+
+### Version bump checklist
+
+Every version bump touches exactly these three files — keep them in sync:
+
+- `display_presets/__init__.py` (`__version__`)
+- `electron-app/package.json` (`version`)
+- `electron-app/src/lib/constants.ts` (`APP_VERSION`)

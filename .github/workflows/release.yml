@@ -14,6 +14,8 @@ jobs:
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - name: Set up Python
         uses: actions/setup-python@v5
@@ -62,14 +64,42 @@ jobs:
         working-directory: electron-app
         run: npm run electron:build
 
+      - name: Generate release notes
+        shell: bash
+        run: |
+          TAG="${GITHUB_REF_NAME}"
+          PREV=$(git describe --tags --abbrev=0 "${TAG}^" 2>/dev/null || echo "")
+          {
+            echo "## MonitorSnap ${TAG}"
+            echo ""
+            echo "### Downloads"
+            echo ""
+            echo "- **Installer** (\`DisplayPresets-Setup-*.exe\`): standard Windows installer with Start Menu entry and uninstaller."
+            echo "- **Portable** (\`DisplayPresets-Portable-*.exe\`): single-file executable, no install required. Runs from USB sticks or any folder."
+            echo ""
+            echo "### Requirements"
+            echo ""
+            echo "- Windows 10 or 11 (x64)"
+            echo "- Python 3.10+ on PATH (the backend is a Python process that the app spawns)"
+            echo ""
+            echo "### Changes"
+            echo ""
+            if [ -n "$PREV" ]; then
+              git log --pretty=format:'- %s (%h)' "${PREV}..${TAG}" | grep -v "^- Merge " || true
+              echo ""
+              echo ""
+              echo "**Full changelog**: https://github.com/${GITHUB_REPOSITORY}/compare/${PREV}...${TAG}"
+            else
+              echo "- Initial release"
+            fi
+          } > release_notes.md
+          cat release_notes.md
+
       - name: Create Release
         uses: softprops/action-gh-release@v2
         with:
           files: electron-app/release/*.exe
-          body: |
-            ## DisplayPresets ${{ github.ref_name }}
-
-            Download the installer (.exe) and run it. Python 3.10+ must be installed on the system.
+          body_path: release_notes.md
           draft: false
           prerelease: false
         env:

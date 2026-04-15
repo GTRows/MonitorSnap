@@ -1,6 +1,6 @@
 {
   "name": "display-presets",
-  "version": "2.2.2",
+  "version": "2.2.3",
   "description": "Save and restore monitor configurations instantly",
   "main": "dist-electron/main.js",
   "scripts": {
@@ -40,8 +40,30 @@
       "output": "release"
     },
     "win": {
-      "target": "nsis",
+      "target": [
+        {
+          "target": "nsis",
+          "arch": [
+            "x64"
+          ]
+        },
+        {
+          "target": "portable",
+          "arch": [
+            "x64"
+          ]
+        }
+      ],
       "icon": "public/icon.ico"
+    },
+    "nsis": {
+      "oneClick": false,
+      "perMachine": false,
+      "allowToChangeInstallationDirectory": true,
+      "artifactName": "DisplayPresets-Setup-${version}.exe"
+    },
+    "portable": {
+      "artifactName": "DisplayPresets-Portable-${version}.exe"
     },
     "extraResources": [
       {
