@@ -172,15 +172,17 @@ class DisplayConfigManager:
 
         _log.debug('apply: desired positions for %d targets: %s', len(desired), desired)
 
-        # --- Get current adapter LUID ---
+        # --- Get current adapter LUID (query ALL paths, not just active,
+        # so transiently-inactive targets like KVM-switched monitors are visible) ---
+        # QDC_ALL_PATHS = 0x01
         pc0, mc0 = c_uint32(), c_uint32()
-        r = GetDisplayConfigBufferSizes(0x02, ctypes.byref(pc0), ctypes.byref(mc0))
+        r = GetDisplayConfigBufferSizes(0x01, ctypes.byref(pc0), ctypes.byref(mc0))
         if r != 0:
             _log.error('GetDisplayConfigBufferSizes failed: %d', r)
             return r
         cur_p = (DISPLAYCONFIG_PATH_INFO * pc0.value)()
         cur_m = (DISPLAYCONFIG_MODE_INFO * mc0.value)()
-        r = QueryDisplayConfig(0x02, ctypes.byref(pc0), cur_p, ctypes.byref(mc0), cur_m, None)
+        r = QueryDisplayConfig(0x01, ctypes.byref(pc0), cur_p, ctypes.byref(mc0), cur_m, None)
         if r != 0:
             _log.error('QueryDisplayConfig failed: %d', r)
             return r
@@ -188,6 +190,8 @@ class DisplayConfigManager:
         cur_info = {}
         for i in range(pc0.value):
             tid = cur_p[i].targetInfo.id
+            if tid in cur_info:
+                continue
             cur_info[tid] = {
                 'luid_lo': cur_p[i].sourceInfo.adapterId.LowPart,
                 'luid_hi': cur_p[i].sourceInfo.adapterId.HighPart,
@@ -197,6 +201,17 @@ class DisplayConfigManager:
         default_ci = next(iter(cur_info.values())) if cur_info else {
             'luid_lo': 0, 'luid_hi': 0, 'out_tech': 0,
         }
+
+        # --- Pre-flight: every saved target id must be reachable on this adapter ---
+        missing = [p['targetInfo']['id'] for p in cfg['paths']
+                   if p['targetInfo']['id'] not in cur_info]
+        if missing:
+            _log.error('Saved targets not present on current adapter: %s', missing)
+            raise Exception(
+                'Preset references display(s) not currently connected '
+                f'(target id{"s" if len(missing) > 1 else ""}: {", ".join(str(t) for t in missing)}). '
+                'Reconnect the display or save a new preset with the current setup.'
+            )
 
         # --- Phase 1: Set topology ---
         saved = cfg['paths']

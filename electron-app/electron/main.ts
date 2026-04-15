@@ -1,4 +1,4 @@
-import { app, BrowserWindow, ipcMain, Tray, Menu, nativeImage, nativeTheme, shell, globalShortcut, dialog } from 'electron';
+import { app, BrowserWindow, ipcMain, Tray, Menu, nativeImage, nativeTheme, shell, globalShortcut } from 'electron';
 import { spawn, ChildProcess } from 'child_process';
 import * as path from 'path';
 import { toAccelerator } from './hotkey';
@@ -7,6 +7,17 @@ let mainWindow: BrowserWindow | null = null;
 let tray: Tray | null = null;
 let pythonProcess: ChildProcess | null = null;
 let backendPort: number | null = null;
+
+interface BackendStatus {
+  ready: boolean;
+  error: string | null;
+}
+let backendStatus: BackendStatus = { ready: false, error: null };
+
+function setBackendStatus(next: BackendStatus): void {
+  backendStatus = next;
+  mainWindow?.webContents.send('backend-status-changed', next);
+}
 
 const isDev = process.env.NODE_ENV !== 'production' || !app.isPackaged;
 
@@ -383,6 +394,27 @@ function registerIpcHandlers(): void {
   ipcMain.handle('open-external', async (_event, url: string) => {
     await shell.openExternal(url);
   });
+
+  ipcMain.handle('get-backend-status', () => backendStatus);
+
+  ipcMain.handle('restart-backend', async () => {
+    if (pythonProcess) {
+      pythonProcess.kill();
+      pythonProcess = null;
+    }
+    backendPort = null;
+    setBackendStatus({ ready: false, error: null });
+    try {
+      await startPythonBackend();
+      setBackendStatus({ ready: true, error: null });
+      await registerAllHotkeys();
+      return { success: true };
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      setBackendStatus({ ready: false, error: message });
+      return { success: false, error: message };
+    }
+  });
 }
 
 // ---------------------------------------------------------------------------
@@ -397,15 +429,14 @@ app.whenReady().then(async () => {
   try {
     await startPythonBackend();
     console.log(`Python backend ready on port ${backendPort}`);
+    setBackendStatus({ ready: true, error: null });
     await registerAllHotkeys();
   } catch (err) {
     console.error('Python backend failed to start:', err);
-    dialog.showErrorBox(
-      'DisplayPresets backend failed to start',
-      `The Python backend could not be launched. The app will not be able to save or apply presets.\n\n` +
-      `Make sure Python 3.10+ is installed and available on PATH.\n\n` +
-      `Details:\n${err instanceof Error ? err.message : String(err)}`
-    );
+    setBackendStatus({
+      ready: false,
+      error: err instanceof Error ? err.message : String(err),
+    });
   }
 });
 

@@ -57,6 +57,9 @@ declare global {
       getTheme: () => Promise<'dark' | 'light'>;
       updateTrayPresets: (presets: Array<{ id: string; name: string }>) => Promise<{ success: boolean }>;
       openExternal: (url: string) => Promise<void>;
+      getBackendStatus: () => Promise<{ ready: boolean; error: string | null }>;
+      restartBackend: () => Promise<{ success: boolean; error?: string }>;
+      onBackendStatusChanged: (callback: (status: { ready: boolean; error: string | null }) => void) => () => void;
       onThemeChanged: (callback: (theme: 'dark' | 'light') => void) => () => void;
       onApplyPreset: (callback: (presetId: string) => void) => () => void;
       onSaveCurrentConfig: (callback: () => void) => () => void;

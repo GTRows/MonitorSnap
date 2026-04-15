@@ -1,4 +1,4 @@
-import { useEffect, Component, type ErrorInfo, type ReactNode } from 'react';
+import { useEffect, useState, Component, type ErrorInfo, type ReactNode } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
 import { Sidebar } from '@/components/Sidebar';
 import { PresetsPage } from '@/pages/PresetsPage';
@@ -9,6 +9,7 @@ import { useAppStore } from '@/stores/appStore';
 import { usePresetStore } from '@/stores/presetStore';
 import { useSettingsStore } from '@/stores/settingsStore';
 import { ToastContainer } from '@/components/ToastContainer';
+import { BackendErrorScreen } from '@/components/BackendErrorScreen';
 
 class PageErrorBoundary extends Component<{ children: ReactNode }, { error: Error | null }> {
   constructor(props: { children: ReactNode }) {
@@ -56,12 +57,24 @@ export function App() {
   const fetchSettings = useSettingsStore((s) => s.fetchSettings);
   const resolvedTheme = useSettingsStore((s) => s.resolvedTheme);
   const setResolvedTheme = useSettingsStore((s) => s.setResolvedTheme);
+  const [backendStatus, setBackendStatus] = useState<{ ready: boolean; error: string | null }>({
+    ready: true,
+    error: null,
+  });
 
   useEffect(() => {
+    if (!window.api) return;
+    window.api.getBackendStatus().then(setBackendStatus);
+    const unsubscribe = window.api.onBackendStatusChanged(setBackendStatus);
+    return unsubscribe;
+  }, []);
+
+  useEffect(() => {
+    if (!backendStatus.ready) return;
     fetchPresets();
     fetchCurrentDisplays();
     fetchSettings();
-  }, [fetchPresets, fetchCurrentDisplays, fetchSettings]);
+  }, [backendStatus.ready, fetchPresets, fetchCurrentDisplays, fetchSettings]);
 
   // Apply theme class
   useEffect(() => {
@@ -109,6 +122,12 @@ export function App() {
         </div>
       </main>
       <ToastContainer />
+      {!backendStatus.ready && (
+        <BackendErrorScreen
+          error={backendStatus.error ?? 'Backend is starting...'}
+          onRetry={() => window.api.restartBackend()}
+        />
+      )}
     </div>
   );
 }
