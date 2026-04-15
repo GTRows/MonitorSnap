@@ -1,6 +1,6 @@
 {
   "name": "display-presets",
-  "version": "2.2.0",
+  "version": "2.2.1",
   "description": "Save and restore monitor configurations instantly",
   "main": "dist-electron/main.js",
   "scripts": {
@@ -42,6 +42,13 @@
     "win": {
       "target": "nsis",
       "icon": "public/icon.ico"
-    }
+    },
+    "extraResources": [
+      {
+        "from": "../display_presets",
+        "to": "display_presets",
+        "filter": ["**/*.py"]
+      }
+    ]
   }
 }
