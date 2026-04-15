@@ -1,47 +1,109 @@
+<div align="center">
+
+<img src="assets/icons/icon_128.png" alt="MonitorSnap" width="96" height="96" />
+
 # MonitorSnap
 
-A Windows desktop app for saving and restoring display configurations. Built with Electron + React frontend and a Python backend using the Windows Display Configuration API.
+**Save your monitor layout. Restore it in one click.**
 
-Primary use case: KVM switch users who need to instantly switch between different display setups.
+One-click display configuration profiles for Windows. Built for KVM users, dock users, and anyone tired of rearranging monitors every time a display plugs in or out.
+
+[![Latest release](https://img.shields.io/github/v/release/GTRows/MonitorSnap?style=flat-square&color=3b82f6)](https://github.com/GTRows/MonitorSnap/releases/latest)
+[![Downloads](https://img.shields.io/github/downloads/GTRows/MonitorSnap/total?style=flat-square&color=3b82f6)](https://github.com/GTRows/MonitorSnap/releases)
+[![License: MIT](https://img.shields.io/badge/license-MIT-3b82f6.svg?style=flat-square)](LICENSE)
+[![Platform](https://img.shields.io/badge/platform-Windows%2010%2F11-0078d4?style=flat-square)](https://www.microsoft.com/windows)
+[![Stars](https://img.shields.io/github/stars/GTRows/MonitorSnap?style=flat-square&color=yellow)](https://github.com/GTRows/MonitorSnap/stargazers)
+
+[Download](#download) - [Features](#features) - [How it works](#how-it-works) - [Build from source](#build-from-source) - [CLI](#cli-usage)
+
+</div>
+
+---
+
+## Why MonitorSnap?
+
+If you use a **KVM switch**, a **laptop dock**, or plug monitors in and out through the day, Windows keeps scrambling your layout. You lose window positions. You have to open Display Settings. You have to drag things around. Again.
+
+MonitorSnap saves a full snapshot of your display configuration — positions, resolutions, refresh rates, rotation, primary display, topology — and puts it back exactly as it was with a single click, a tray menu item, or a global hotkey.
+
+## Screenshots
+
+<div align="center">
+
+<img src="docs/screenshots/presets.png" alt="Presets page" width="720" />
+
+*Presets page — browse, apply, edit, and delete saved layouts.*
+
+<br /><br />
+
+<img src="docs/screenshots/displays.png" alt="Displays page" width="720" />
+
+*Displays page — live view of current monitors with drag-to-edit layout.*
+
+<br /><br />
+
+<img src="docs/screenshots/tray.png" alt="Tray menu" width="360" />
+
+*System tray menu — apply presets without opening the app.*
+
+</div>
+
+> Screenshots not rendering? Drop PNGs into `docs/screenshots/` with the filenames above.
 
 ## Features
 
-- Save and restore complete display configurations
-- Visual monitor layout preview with drag-to-rearrange editing
-- System tray with quick-apply menu
-- Dark / Light / System theme (Windows 11 Fluent Design)
-- Auto-start with Windows
-- Export / Import presets
-- CLI interface for scripting
+- **One-click layout switching.** Apply any saved preset from the main window, the system tray, or a global hotkey.
+- **Visual layout editor.** See your monitors exactly as Windows does. Drag them to rearrange, then save.
+- **Global hotkeys.** Bind any preset to a shortcut (for example `Ctrl+Alt+Shift+1`). Works system-wide, even when the app is minimized.
+- **Full state capture.** Positions, resolutions, refresh rates, rotation (landscape / portrait / flipped), primary display, scaling, and topology (extended, cloned, single).
+- **Lives in the system tray.** Quiet, out of the way. Double-click to open, right-click for quick-apply.
+- **Fluent Design.** Native Windows 11 look — dark, light, or system theme.
+- **Portable option.** Single-file executable if you don't want an installer.
+- **CLI included.** Script your layouts from PowerShell or batch files.
+- **Auto-start with Windows.** Optional. Fully under your control.
 
-## What Gets Saved
+## Download
 
-Each preset captures the full display state via Windows Display Configuration API:
+Head to the **[latest release](https://github.com/GTRows/MonitorSnap/releases/latest)** and grab one of:
 
-- Monitor positions (X, Y coordinates)
-- Resolutions and refresh rates
-- Orientation (landscape, portrait, flipped)
-- Primary monitor assignment
-- Display topology (extended, cloned, single)
-- Scaling settings
+| File | When to use |
+|---|---|
+| `DisplayPresets-Setup-<version>.exe` | Standard installer. Start Menu entry, uninstaller, updates via reinstall. |
+| `DisplayPresets-Portable-<version>.exe` | Single-file portable build. Runs from a USB stick or any folder, no install. |
 
-## Installation
+**Requirements:** Windows 10 or 11 (x64), [Python 3.10+](https://www.python.org/downloads/) on PATH. MonitorSnap uses a Python backend to talk to the Windows Display Configuration API — make sure "Add Python to PATH" is checked when installing Python.
 
-### From Source
+## How it works
 
-Requirements: Windows 11, Python 3.10+, Node.js 20+
+MonitorSnap reads the full display configuration from Windows via the [CCD API](https://learn.microsoft.com/en-us/windows-hardware/drivers/display/ccd-apis) (`QueryDisplayConfig` / `SetDisplayConfig`) through Python's `ctypes`. It applies configurations in two phases: first the topology (which monitor is connected to which source), then positions and modes. No registry hacks, no third-party drivers.
+
+```
+Electron (React + TypeScript)
+      |
+      | IPC
+      v
+Python HTTP backend (stdlib only)
+      |
+      | ctypes
+      v
+user32.dll - QueryDisplayConfig / SetDisplayConfig
+```
+
+On startup, Electron spawns the Python backend on a random free port and proxies all frontend IPC calls to `http://127.0.0.1:{port}`. No network traffic leaves your machine.
+
+## Build from source
+
+Requirements: Windows, **Python 3.10+**, **Node.js 20+**, **Git**.
 
 ```bash
 git clone https://github.com/GTRows/MonitorSnap.git
 cd MonitorSnap
-
-# Start the Electron app (handles everything)
 dev.bat
 ```
 
-`dev.bat` installs npm dependencies, builds the Electron main process, and launches the app with the Python backend.
+`dev.bat` installs npm dependencies, compiles the Electron main process, and launches the app with the Python backend in dev mode.
 
-### Manual Start
+Manual equivalent:
 
 ```bash
 cd electron-app
@@ -49,153 +111,89 @@ npm install
 npm run electron:dev
 ```
 
-This starts Vite dev server + Electron. The Python HTTP backend is spawned automatically by the Electron main process.
+Build the production installer and portable exe:
 
-### CLI Only (no GUI)
+```bash
+cd electron-app
+npm run electron:build
+# artifacts land in electron-app/release/
+```
+
+## CLI usage
+
+Install the Python package once, then drive everything from the terminal:
 
 ```bash
 pip install -e .
-monitorsnap list
-monitorsnap save "Work Setup"
-monitorsnap apply "Work Setup"
 ```
 
-## Architecture
-
 ```
-Electron Main Process
-    |
-    |-- spawns --> Python HTTP Server (127.0.0.1:{random port})
-    |                  |
-    |                  |-- display_config.py  (Windows CCD API via ctypes)
-    |                  |-- store.py           (preset CRUD, %APPDATA%)
-    |                  |-- settings.py        (user preferences)
-    |                  |-- displays.py        (current monitor info)
-    |
-    |-- IPC --> React Renderer (Vite + TailwindCSS + Zustand)
-                   |
-                   |-- pages/      (Presets, Displays, Settings, About)
-                   |-- components/ (MonitorCanvas, HotkeyInput, etc.)
-                   |-- stores/     (presetStore, settingsStore, etc.)
+monitorsnap list                  List all saved presets
+monitorsnap current               Show current display configuration
+monitorsnap save "Work Setup"     Save current layout
+monitorsnap apply "Work Setup"    Restore a layout
+monitorsnap rename <old> <new>    Rename a preset
+monitorsnap delete <name>         Delete a preset
+monitorsnap info <name>           Show preset details
+monitorsnap --version             Print version
 ```
 
-The Python server picks a free port, writes `READY:{port}` to stdout. Electron reads this and proxies all IPC requests to `http://127.0.0.1:{port}/`.
+Or, without installing, `python -m display_presets <command>`.
 
-## Project Structure
+## Data storage
 
-```
-MonitorSnap/
-  display_presets/             Python backend
-    __main__.py                CLI entry point
-    server.py                  HTTP server for Electron
-    display_config.py          Windows Display Configuration API (ctypes)
-    displays.py                Current monitor info
-    store.py                   UUID-based preset CRUD
-    preset_service.py          Name-based preset CRUD (CLI)
-    settings.py                User preferences
-    config.py                  App data paths
-    autostart.py               Windows registry startup
-    logger.py                  File + stderr logging
-    cli.py                     CLI commands
+All user data lives in `%APPDATA%\DisplayPresets\`:
 
-  electron-app/                Electron + React frontend
-    electron/
-      main.ts                  Main process, spawns Python backend
-      preload.ts               Context bridge (typed IPC API)
-    src/
-      pages/                   PresetsPage, DisplaysPage, SettingsPage, AboutPage
-      components/              MonitorCanvas, MonitorEditPanel, Sidebar, HotkeyInput,
-                               Toggle, ConfirmDialog, ContextMenu, Tooltip, Toast
-      stores/                  Zustand (presets, settings, app, toast)
-      lib/                     Utilities (openLink, constants)
-      types/                   TypeScript type definitions
+- `presets/{uuid}.json` — saved layouts
+- `settings.json` — app preferences
+- `debug.log` — diagnostic log
 
-  assets/icons/                Source icon files
-  scripts/                     Icon generation (generate_icons.py)
-  docs/                        UI feature spec
-  .github/workflows/           CI/CD (build + release)
-```
+## Tech stack
 
-## Data Storage
-
-All user data in `%APPDATA%\DisplayPresets\`:
-
-- `presets/{uuid}.json` -- saved display configurations
-- `settings.json` -- app preferences
-- `debug.log` -- debug output
-
-## CLI Usage
-
-```
-python -m display_presets <command>
-
-Commands:
-  list                  List all saved presets
-  apply <name>          Apply a preset
-  save <name>           Save current display config
-  delete <name>         Delete a preset
-  rename <old> <new>    Rename a preset
-  current               Show current display info
-  info <name>           Show preset details
-  --version             Show version
-```
-
-## Branch Strategy
-
-```
-main                Stable releases only. Every commit is tagged (v2.0.0, v2.1.0, ...).
- \
-  develop           Integration branch. Tested features land here first.
-   \
-    feature/xxx     Short-lived branches for individual features or fixes.
-```
-
-### Rules
-
-- **`main`** -- Production. Only receives merges from `develop` when cutting a release. Always tagged.
-- **`develop`** -- Staging area. All feature work merges here after testing. Must stay buildable.
-- **`feature/*`** -- Created from `develop`, merged back into `develop` via PR. Deleted after merge.
-
-### Workflow
-
-```bash
-# Start a new feature
-git checkout develop
-git pull origin develop
-git checkout -b feature/my-feature
-
-# Work, commit, push
-git push -u origin feature/my-feature
-
-# When done: open PR into develop, review, merge, delete branch.
-# When releasing: merge develop into main, tag, push.
-```
-
-### Hotfix
-
-For urgent fixes on a released version:
-
-```bash
-git checkout main
-git checkout -b hotfix/fix-description
-# fix, commit, PR into main AND develop
-```
+- **Frontend:** Electron, React 19, TypeScript, TailwindCSS, Zustand, Framer Motion, Vite.
+- **Backend:** Python 3.10+ (stdlib only — no pip dependencies), ctypes, stdlib `http.server`.
+- **Packaging:** electron-builder (NSIS installer + portable).
+- **CI:** GitHub Actions — test, typecheck, build, release on every `v*` tag.
 
 ## Roadmap
 
-Planned features for upcoming releases:
+- Auto-update via GitHub Releases
+- Localization (English, Turkish, community translations)
+- More hotkey coverage and per-preset activation conditions
 
-- **Auto-update** -- Check for new versions on startup, download and install updates automatically via GitHub Releases
-- **Localization** -- Multi-language UI support (English, Turkish, and community translations)
-- **Tests** -- Unit and integration tests for both Python backend (pytest) and Electron frontend
+## Contributing
 
-## Known Issues
+Contributions welcome. The project uses a simple branch model:
 
-- All monitors from the preset must be physically connected when applying
-- Laptop docking stations may need a few seconds to stabilize before applying
-- Custom refresh rates set via GPU control panel may not be captured
-- Cannot override hardware or driver limitations
+- `main` — stable releases only, always tagged.
+- `develop` — integration branch; features merge here first.
+- `feature/<name>` — short-lived branches off `develop`.
+
+Before opening a PR, please run:
+
+```bash
+cd electron-app
+npx tsc --noEmit
+npm test
+cd ..
+python -m pytest tests/
+```
+
+## Known limitations
+
+- All monitors referenced by a preset must be physically connected when you apply it. MonitorSnap will tell you which targets are missing if they aren't.
+- Docking stations may need a few seconds to stabilize after connect; apply a preset after Windows settles.
+- Custom refresh rates set via GPU control panels are not always captured.
+- Hardware and driver limits always win.
 
 ## License
 
-MIT -- see [LICENSE](LICENSE)
+MIT — see [LICENSE](LICENSE).
+
+---
+
+<div align="center">
+
+If MonitorSnap saved you time, a **star** helps other Windows users find it.
+
+</div>
