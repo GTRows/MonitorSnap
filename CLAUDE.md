@@ -79,22 +79,25 @@ Windows-only due to ctypes bindings to `user32.dll` Display Configuration API. T
 
 ## Release Standards
 
-Every release MUST produce both of the following artifacts, uploaded to the GitHub release:
+Every release MUST produce all three of the following artifacts, uploaded to the GitHub release:
 
 1. **Installer** — `DisplayPresets-Setup-<version>.exe` (NSIS, per-user, creates Start Menu entry and uninstaller).
 2. **Portable** — `DisplayPresets-Portable-<version>.exe` (single-file executable, no install).
+3. **Zip** — `DisplayPresets-<version>-win.zip` (pre-built app folder, extract-and-run).
 
-Both targets are configured in `electron-app/package.json` under `build.win.target`. Do not remove either target. `.github/workflows/release.yml` uploads everything matching `electron-app/release/*.exe`.
+All three targets are configured in `electron-app/package.json` under `build.win.target`. Do not remove any target. `.github/workflows/release.yml` uploads everything matching `electron-app/release/*.exe` and `*.zip`.
+
+The backend is a standalone PyInstaller exe (`dist-backend/monitorsnap-backend.exe`) bundled via `extraResources`. End users do NOT need Python installed. Dev builds still use `python -m display_presets.server` because `app.isPackaged` is false.
 
 ### Release notes
 
 Release notes are generated automatically in the workflow from the git log between the previous tag and the new one. They must include, as section headings:
 
-- **Downloads** — describe Installer vs Portable so users can pick.
-- **Requirements** — Windows version, Python 3.10+ on PATH.
+- **Downloads** — describe Installer, Portable, and Zip so users can pick.
+- **Requirements** — Windows version only (no runtime deps; backend is bundled).
 - **Changes** — bullet list of commit subjects (merge commits filtered out), followed by a `Full changelog` compare link.
 
-When cutting a release, verify after the workflow finishes that both `.exe` files are attached to the GitHub release and the notes render correctly. If either is missing, investigate the workflow before tagging the next version.
+When cutting a release, verify after the workflow finishes that all three artifacts (`.exe` x2 + `.zip`) are attached to the GitHub release and the notes render correctly. If any are missing, investigate the workflow before tagging the next version.
 
 ### Version bump checklist
 
