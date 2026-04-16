@@ -21,6 +21,101 @@ function setBackendStatus(next: BackendStatus): void {
 
 const isDev = !app.isPackaged;
 
+const GITHUB_OWNER = 'GTRows';
+const GITHUB_REPO_NAME = 'MonitorSnap';
+const LATEST_RELEASE_URL = `https://api.github.com/repos/${GITHUB_OWNER}/${GITHUB_REPO_NAME}/releases/latest`;
+
+interface UpdateInfo {
+  available: boolean;
+  currentVersion: string;
+  latestVersion: string | null;
+  releaseUrl: string | null;
+  releaseNotes: string | null;
+  publishedAt: string | null;
+  checkedAt: string;
+  error: string | null;
+}
+
+let lastUpdateInfo: UpdateInfo | null = null;
+
+function parseVersion(raw: string): number[] {
+  return raw.replace(/^v/i, '').split(/[.+-]/).map((n) => {
+    const parsed = parseInt(n, 10);
+    return Number.isNaN(parsed) ? 0 : parsed;
+  });
+}
+
+function isNewerVersion(latest: string, current: string): boolean {
+  const a = parseVersion(latest);
+  const b = parseVersion(current);
+  const len = Math.max(a.length, b.length);
+  for (let i = 0; i < len; i++) {
+    const x = a[i] ?? 0;
+    const y = b[i] ?? 0;
+    if (x !== y) return x > y;
+  }
+  return false;
+}
+
+async function fetchLatestRelease(): Promise<UpdateInfo> {
+  const current = app.getVersion();
+  const base: UpdateInfo = {
+    available: false,
+    currentVersion: current,
+    latestVersion: null,
+    releaseUrl: null,
+    releaseNotes: null,
+    publishedAt: null,
+    checkedAt: new Date().toISOString(),
+    error: null,
+  };
+  try {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), 10000);
+    const res = await fetch(LATEST_RELEASE_URL, {
+      headers: {
+        Accept: 'application/vnd.github+json',
+        'User-Agent': `${GITHUB_REPO_NAME}/${current}`,
+      },
+      signal: controller.signal,
+    });
+    clearTimeout(timer);
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const data = await res.json() as {
+      tag_name: string;
+      html_url: string;
+      body?: string;
+      published_at?: string;
+      prerelease?: boolean;
+      draft?: boolean;
+    };
+    if (data.draft || data.prerelease) return base;
+    const latest = data.tag_name.replace(/^v/i, '');
+    return {
+      ...base,
+      available: isNewerVersion(latest, current),
+      latestVersion: latest,
+      releaseUrl: data.html_url,
+      releaseNotes: data.body ?? '',
+      publishedAt: data.published_at ?? null,
+    };
+  } catch (err) {
+    return {
+      ...base,
+      error: err instanceof Error ? err.message : String(err),
+    };
+  }
+}
+
+async function runUpdateCheck(notifyIfAvailable: boolean): Promise<UpdateInfo> {
+  const info = await fetchLatestRelease();
+  lastUpdateInfo = info;
+  if (notifyIfAvailable && info.available) {
+    mainWindow?.webContents.send('update-available', info);
+  }
+  return info;
+}
+
 // ---------------------------------------------------------------------------
 // Python backend
 // ---------------------------------------------------------------------------
@@ -138,14 +233,24 @@ function apiDelete(urlPath: string) {
 // Global hotkeys
 // ---------------------------------------------------------------------------
 
+type HotkeyStatus = 'ok' | 'unsupported' | 'busy';
+let hotkeyStatuses: Record<string, HotkeyStatus> = {};
+
+function setHotkeyStatuses(next: Record<string, HotkeyStatus>): void {
+  hotkeyStatuses = next;
+  mainWindow?.webContents.send('hotkey-statuses-changed', next);
+}
+
 async function registerAllHotkeys(): Promise<void> {
   globalShortcut.unregisterAll();
+  const statuses: Record<string, HotkeyStatus> = {};
   try {
     const presets = await api('/presets') as Array<{ id: string; hotkey: string | null; name: string }>;
     for (const p of presets) {
       if (!p.hotkey) continue;
       const accel = toAccelerator(p.hotkey);
       if (!accel) {
+        statuses[p.id] = 'unsupported';
         console.warn(`[hotkey] Cannot register "${p.hotkey}" for preset "${p.name}": unsupported key`);
         continue;
       }
@@ -153,12 +258,16 @@ async function registerAllHotkeys(): Promise<void> {
         apiPost(`/presets/${p.id}/apply`).catch((e) => console.error('[hotkey] apply failed:', e));
       });
       if (!ok) {
+        statuses[p.id] = 'busy';
         console.warn(`[hotkey] Failed to register "${accel}" for preset "${p.name}" (may be taken by another app)`);
+      } else {
+        statuses[p.id] = 'ok';
       }
     }
   } catch (e) {
     console.error('[hotkey] Could not load presets for registration:', e);
   }
+  setHotkeyStatuses(statuses);
 }
 
 // ---------------------------------------------------------------------------
@@ -411,6 +520,14 @@ function registerIpcHandlers(): void {
 
   ipcMain.handle('get-backend-status', () => backendStatus);
 
+  ipcMain.handle('check-for-updates', async () => {
+    return runUpdateCheck(false);
+  });
+
+  ipcMain.handle('get-last-update-info', () => lastUpdateInfo);
+
+  ipcMain.handle('get-hotkey-statuses', () => hotkeyStatuses);
+
   ipcMain.handle('restart-backend', async () => {
     if (pythonProcess) {
       pythonProcess.kill();
@@ -452,6 +569,10 @@ app.whenReady().then(async () => {
       error: err instanceof Error ? err.message : String(err),
     });
   }
+
+  setTimeout(() => {
+    runUpdateCheck(true).catch((e) => console.error('[update-check]', e));
+  }, 8000);
 });
 
 app.on('window-all-closed', () => {

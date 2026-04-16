@@ -32,6 +32,20 @@ export interface Settings {
   fontScale: number;
 }
 
+export interface UpdateInfo {
+  available: boolean;
+  currentVersion: string;
+  latestVersion: string | null;
+  releaseUrl: string | null;
+  releaseNotes: string | null;
+  publishedAt: string | null;
+  checkedAt: string;
+  error: string | null;
+}
+
+export type HotkeyStatus = 'ok' | 'unsupported' | 'busy';
+export type HotkeyStatusMap = Record<string, HotkeyStatus>;
+
 const api = {
   getPresets: (): Promise<Preset[]> => ipcRenderer.invoke('get-presets'),
   getCurrentDisplays: (): Promise<Monitor[]> => ipcRenderer.invoke('get-current-displays'),
@@ -52,6 +66,22 @@ const api = {
   openExternal: (url: string): Promise<void> => ipcRenderer.invoke('open-external', url),
   getBackendStatus: (): Promise<{ ready: boolean; error: string | null }> => ipcRenderer.invoke('get-backend-status'),
   restartBackend: (): Promise<{ success: boolean; error?: string }> => ipcRenderer.invoke('restart-backend'),
+  checkForUpdates: (): Promise<UpdateInfo> => ipcRenderer.invoke('check-for-updates'),
+  getLastUpdateInfo: (): Promise<UpdateInfo | null> => ipcRenderer.invoke('get-last-update-info'),
+
+  onUpdateAvailable: (callback: (info: UpdateInfo) => void) => {
+    const handler = (_event: Electron.IpcRendererEvent, info: UpdateInfo) => callback(info);
+    ipcRenderer.on('update-available', handler);
+    return () => ipcRenderer.removeListener('update-available', handler);
+  },
+
+  getHotkeyStatuses: (): Promise<HotkeyStatusMap> => ipcRenderer.invoke('get-hotkey-statuses'),
+
+  onHotkeyStatusesChanged: (callback: (statuses: HotkeyStatusMap) => void) => {
+    const handler = (_event: Electron.IpcRendererEvent, statuses: HotkeyStatusMap) => callback(statuses);
+    ipcRenderer.on('hotkey-statuses-changed', handler);
+    return () => ipcRenderer.removeListener('hotkey-statuses-changed', handler);
+  },
 
   onBackendStatusChanged: (callback: (status: { ready: boolean; error: string | null }) => void) => {
     const handler = (_event: Electron.IpcRendererEvent, status: { ready: boolean; error: string | null }) => callback(status);
