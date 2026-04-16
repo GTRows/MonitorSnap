@@ -1,6 +1,6 @@
 {
   "name": "display-presets",
-  "version": "2.2.3",
+  "version": "2.2.4",
   "description": "Save and restore monitor configurations instantly",
   "main": "dist-electron/main.js",
   "scripts": {
