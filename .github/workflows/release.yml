@@ -89,6 +89,18 @@ jobs:
         working-directory: electron-app
         run: npm run electron:build
 
+      - name: Build MSI (WiX)
+        working-directory: electron-app
+        shell: pwsh
+        run: |
+          $wixBin = Join-Path $env:WIX 'bin'
+          if (-not (Test-Path $wixBin)) {
+            Write-Error "WiX not found at $wixBin"
+            exit 1
+          }
+          $env:PATH = "$wixBin;$env:PATH"
+          node scripts/build-msi.js
+
       - name: Generate release notes
         shell: bash
         run: |
@@ -99,7 +111,8 @@ jobs:
             echo ""
             echo "### Downloads"
             echo ""
-            echo "- **Installer** (\`DisplayPresets-Setup-*.exe\`): standard Windows installer with Start Menu entry and uninstaller."
+            echo "- **Installer** (\`DisplayPresets-Setup-*.exe\`): standard NSIS installer with Start Menu entry and uninstaller."
+            echo "- **MSI** (\`DisplayPresets-*.msi\`): Windows Installer package for enterprise / group policy deployment."
             echo "- **Portable** (\`DisplayPresets-Portable-*.exe\`): single-file executable, no install required. Runs from USB sticks or any folder."
             echo "- **Zip** (\`DisplayPresets-*-win.zip\`): pre-built app folder. Extract anywhere and run \`DisplayPresets.exe\`. No installer, no registry writes."
             echo ""
@@ -127,6 +140,7 @@ jobs:
           files: |
             electron-app/release/*.exe
             electron-app/release/*.zip
+            electron-app/release/*.msi
           body_path: release_notes.md
           draft: false
           prerelease: false
