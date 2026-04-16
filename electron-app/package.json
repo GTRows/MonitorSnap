@@ -1,6 +1,6 @@
 {
   "name": "display-presets",
-  "version": "2.2.4",
+  "version": "2.3.0",
   "description": "Save and restore monitor configurations instantly",
   "main": "dist-electron/main.js",
   "scripts": {
@@ -67,11 +67,8 @@
     },
     "extraResources": [
       {
-        "from": "../display_presets",
-        "to": "display_presets",
-        "filter": [
-          "**/*.py"
-        ]
+        "from": "../dist-backend/monitorsnap-backend.exe",
+        "to": "backend/monitorsnap-backend.exe"
       }
     ]
   }

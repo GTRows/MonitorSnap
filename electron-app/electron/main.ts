@@ -25,31 +25,45 @@ const isDev = !app.isPackaged;
 // Python backend
 // ---------------------------------------------------------------------------
 
-function resolveBackendCwd(): string {
-  // In dev, the Python package sits two levels up from dist-electron/.
-  // In a packaged app, we ship display_presets/ via extraResources so it
-  // lives next to app.asar under process.resourcesPath.
-  if (app.isPackaged) {
-    return process.resourcesPath;
-  }
-  return path.join(__dirname, '../../');
+interface BackendCommand {
+  command: string;
+  args: string[];
+  cwd: string;
 }
 
-function resolvePythonCommand(): string {
-  // Let users override if their python isn't on PATH or is named differently.
-  if (process.env.DISPLAYPRESETS_PYTHON) return process.env.DISPLAYPRESETS_PYTHON;
-  return process.platform === 'win32' ? 'python' : 'python3';
+function resolveBackendCommand(): BackendCommand {
+  // Packaged: run the bundled PyInstaller exe shipped in resources/backend/.
+  if (app.isPackaged) {
+    const exe = path.join(process.resourcesPath, 'backend', 'monitorsnap-backend.exe');
+    return { command: exe, args: [], cwd: process.resourcesPath };
+  }
+
+  // Dev override: let users point at a specific interpreter.
+  if (process.env.DISPLAYPRESETS_PYTHON) {
+    return {
+      command: process.env.DISPLAYPRESETS_PYTHON,
+      args: ['-m', 'display_presets.server'],
+      cwd: path.join(__dirname, '../../'),
+    };
+  }
+
+  // Dev default: use system python + the source package.
+  const py = process.platform === 'win32' ? 'python' : 'python3';
+  return {
+    command: py,
+    args: ['-m', 'display_presets.server'],
+    cwd: path.join(__dirname, '../../'),
+  };
 }
 
 function startPythonBackend(): Promise<number> {
   return new Promise((resolve, reject) => {
-    const cwd = resolveBackendCwd();
-    const pythonCmd = resolvePythonCommand();
+    const { command, args, cwd } = resolveBackendCommand();
     let stderrBuffer = '';
 
-    const proc = spawn(pythonCmd, ['-m', 'display_presets.server'], {
+    const proc = spawn(command, args, {
       cwd,
-      env: process.env,
+      env: { ...process.env, DISPLAYPRESETS_APP_EXE: process.execPath },
       windowsHide: true,
     });
 
@@ -71,8 +85,8 @@ function startPythonBackend(): Promise<number> {
     });
 
     proc.on('error', (err) => {
-      console.error('Failed to start Python backend:', err);
-      reject(new Error(`${err.message} (tried '${pythonCmd}' in ${cwd})`));
+      console.error('Failed to start backend:', err);
+      reject(new Error(`${err.message} (tried '${command}' in ${cwd})`));
     });
 
     proc.on('exit', (code) => {
