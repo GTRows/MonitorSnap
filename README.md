@@ -70,6 +70,7 @@ Head to the **[latest release](https://github.com/GTRows/MonitorSnap/releases/la
 |---|---|
 | `DisplayPresets-Setup-<version>.exe` | Standard installer. Start Menu entry, uninstaller, updates via reinstall. |
 | `DisplayPresets-Portable-<version>.exe` | Single-file portable build. Runs from a USB stick or any folder, no install. |
+| `DisplayPresets-<version>-win.zip` | Pre-built app folder. Extract anywhere and run `DisplayPresets.exe`. No installer, no registry writes. |
 
 **Requirements:** Windows 10 or 11 (x64). No runtime dependencies — the Python backend is bundled inside the app.
 

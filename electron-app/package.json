@@ -1,6 +1,6 @@
 {
   "name": "display-presets",
-  "version": "2.3.0",
+  "version": "2.4.0",
   "description": "Save and restore monitor configurations instantly",
   "main": "dist-electron/main.js",
   "scripts": {
@@ -26,6 +26,7 @@
     "concurrently": "^9.1.0",
     "electron": "^33.3.0",
     "electron-builder": "^25.1.0",
+    "jsdom": "^29.0.2",
     "postcss": "^8.4.49",
     "tailwindcss": "^3.4.17",
     "typescript": "^5.7.0",
@@ -49,6 +50,12 @@
         },
         {
           "target": "portable",
+          "arch": [
+            "x64"
+          ]
+        },
+        {
+          "target": "zip",
           "arch": [
             "x64"
           ]
