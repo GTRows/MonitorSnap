@@ -47,7 +47,7 @@ jobs:
 
       - name: Install dependencies
         working-directory: electron-app
-        run: npm ci --omit=optional
+        run: npm ci
 
       - name: TypeScript check
         working-directory: electron-app
@@ -82,7 +82,7 @@ jobs:
 
       - name: Install dependencies
         working-directory: electron-app
-        run: npm ci --omit=optional
+        run: npm ci
 
       - name: Build Electron app
         working-directory: electron-app
