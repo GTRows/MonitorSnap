@@ -60,6 +60,28 @@ jobs:
             echo "No frontend test script found, skipping"
           fi
 
+      - name: Build Python backend (PyInstaller)
+        shell: bash
+        run: |
+          pip install pyinstaller==6.16.0
+          pyinstaller \
+            --onefile \
+            --name monitorsnap-backend \
+            --console \
+            --clean \
+            --noconfirm \
+            --distpath dist-backend \
+            --workpath build-backend \
+            --hidden-import display_presets.autostart \
+            --hidden-import display_presets.store \
+            --hidden-import display_presets.displays \
+            --hidden-import display_presets.display_config \
+            --hidden-import display_presets.settings \
+            --hidden-import display_presets.logger \
+            --hidden-import display_presets.config \
+            backend_main.py
+          ls -la dist-backend/
+
       - name: Build Electron app
         working-directory: electron-app
         run: npm run electron:build
@@ -80,7 +102,7 @@ jobs:
             echo "### Requirements"
             echo ""
             echo "- Windows 10 or 11 (x64)"
-            echo "- Python 3.10+ on PATH (the backend is a Python process that the app spawns)"
+            echo "- No runtime dependencies. The Python backend is bundled inside the app."
             echo ""
             echo "### Changes"
             echo ""
