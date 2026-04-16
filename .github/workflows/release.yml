@@ -37,7 +37,7 @@ jobs:
 
       - name: Install dependencies
         working-directory: electron-app
-        run: npm ci --omit=optional
+        run: npm ci
 
       - name: TypeScript check
         working-directory: electron-app
@@ -88,6 +88,10 @@ jobs:
       - name: Build Electron app
         working-directory: electron-app
         run: npm run electron:build
+
+      - name: Install electron-wix-msi (on-demand)
+        working-directory: electron-app
+        run: npm install electron-wix-msi@5.1.3 --no-save --ignore-scripts
 
       - name: Build MSI (WiX)
         working-directory: electron-app
