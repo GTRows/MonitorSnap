@@ -19,7 +19,7 @@ function setBackendStatus(next: BackendStatus): void {
   mainWindow?.webContents.send('backend-status-changed', next);
 }
 
-const isDev = process.env.NODE_ENV !== 'production' || !app.isPackaged;
+const isDev = !app.isPackaged;
 
 // ---------------------------------------------------------------------------
 // Python backend
