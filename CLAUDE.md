@@ -79,13 +79,14 @@ Windows-only due to ctypes bindings to `user32.dll` Display Configuration API. T
 
 ## Release Standards
 
-Every release MUST produce all three of the following artifacts, uploaded to the GitHub release:
+Every release MUST produce all four of the following artifacts, uploaded to the GitHub release:
 
 1. **Installer** — `DisplayPresets-Setup-<version>.exe` (NSIS, per-user, creates Start Menu entry and uninstaller).
-2. **Portable** — `DisplayPresets-Portable-<version>.exe` (single-file executable, no install).
-3. **Zip** — `DisplayPresets-<version>-win.zip` (pre-built app folder, extract-and-run).
+2. **MSI** — `DisplayPresets-<version>.msi` (Windows Installer package, for enterprise / GPO deployment; built via `electron-wix-msi` + WiX Toolset).
+3. **Portable** — `DisplayPresets-Portable-<version>.exe` (single-file executable, no install).
+4. **Zip** — `DisplayPresets-<version>-win.zip` (pre-built app folder, extract-and-run).
 
-All three targets are configured in `electron-app/package.json` under `build.win.target`. Do not remove any target. `.github/workflows/release.yml` uploads everything matching `electron-app/release/*.exe` and `*.zip`.
+NSIS, portable, and zip are configured in `electron-app/package.json` under `build.win.target`. The MSI is built by `electron-app/scripts/build-msi.js` as a post-build step in `.github/workflows/release.yml` (requires WiX Toolset on the runner — `windows-latest` ships 3.11). Do not remove any target.
 
 The backend is a standalone PyInstaller exe (`dist-backend/monitorsnap-backend.exe`) bundled via `extraResources`. End users do NOT need Python installed. Dev builds still use `python -m display_presets.server` because `app.isPackaged` is false.
 
@@ -93,11 +94,11 @@ The backend is a standalone PyInstaller exe (`dist-backend/monitorsnap-backend.e
 
 Release notes are generated automatically in the workflow from the git log between the previous tag and the new one. They must include, as section headings:
 
-- **Downloads** — describe Installer, Portable, and Zip so users can pick.
+- **Downloads** — describe Installer, MSI, Portable, and Zip so users can pick.
 - **Requirements** — Windows version only (no runtime deps; backend is bundled).
 - **Changes** — bullet list of commit subjects (merge commits filtered out), followed by a `Full changelog` compare link.
 
-When cutting a release, verify after the workflow finishes that all three artifacts (`.exe` x2 + `.zip`) are attached to the GitHub release and the notes render correctly. If any are missing, investigate the workflow before tagging the next version.
+When cutting a release, verify after the workflow finishes that all four artifacts (`.exe` x2 + `.msi` + `.zip`) are attached to the GitHub release and the notes render correctly. If any are missing, investigate the workflow before tagging the next version.
 
 ### Version bump checklist
 

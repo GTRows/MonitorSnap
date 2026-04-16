@@ -68,7 +68,8 @@ Head to the **[latest release](https://github.com/GTRows/MonitorSnap/releases/la
 
 | File | When to use |
 |---|---|
-| `DisplayPresets-Setup-<version>.exe` | Standard installer. Start Menu entry, uninstaller, updates via reinstall. |
+| `DisplayPresets-Setup-<version>.exe` | Standard NSIS installer. Start Menu entry, uninstaller, updates via reinstall. |
+| `DisplayPresets-<version>.msi` | Windows Installer package. For enterprise / group policy deployment. |
 | `DisplayPresets-Portable-<version>.exe` | Single-file portable build. Runs from a USB stick or any folder, no install. |
 | `DisplayPresets-<version>-win.zip` | Pre-built app folder. Extract anywhere and run `DisplayPresets.exe`. No installer, no registry writes. |
 
