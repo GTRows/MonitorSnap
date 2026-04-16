@@ -32,13 +32,15 @@ async function main() {
   await msiCreator.create();
   const { supportBinaries } = await msiCreator.compile();
 
-  const srcMsi = path.join(releaseDir, 'MonitorSnap.msi');
+  const srcMsi = path.join(releaseDir, 'DisplayPresets.msi');
   const dstMsi = path.join(releaseDir, `DisplayPresets-${pkg.version}.msi`);
   if (fs.existsSync(srcMsi)) {
     fs.renameSync(srcMsi, dstMsi);
     console.log(`MSI: ${dstMsi}`);
   } else {
-    console.error('MSICreator finished but MonitorSnap.msi was not produced.');
+    console.error(`MSICreator finished but ${srcMsi} was not produced.`);
+    console.error('Files in release dir:');
+    for (const f of fs.readdirSync(releaseDir)) console.error(`  ${f}`);
     process.exit(1);
   }
 
