@@ -3,10 +3,11 @@ import { motion, AnimatePresence } from 'framer-motion';
 import {
   Play, Pencil, Copy, Trash2, Plus, Keyboard, Check, X,
   Save, RotateCcw, Settings2, MonitorCheck, GripVertical, Search, Undo2, Redo2,
-  ChevronUp, ChevronDown, ChevronsUpDown,
+  ChevronUp, ChevronDown, ChevronsUpDown, AlertTriangle,
 } from 'lucide-react';
 import { usePresetStore } from '@/stores/presetStore';
 import { useSettingsStore } from '@/stores/settingsStore';
+import { useHotkeyStatusStore } from '@/stores/hotkeyStatusStore';
 import { MonitorCanvas } from '@/components/MonitorCanvas';
 import { MonitorEditPanel } from '@/components/MonitorEditPanel';
 import { HotkeyInput } from '@/components/HotkeyInput';
@@ -87,6 +88,9 @@ export function PresetsPage() {
   );
 
   const editModeEnabled = useSettingsStore((s) => s.settings.enableEditMode);
+  const hotkeyStatuses = useHotkeyStatusStore((s) => s.statuses);
+  const selectedHotkeyStatus =
+    selectedPresetId ? hotkeyStatuses[selectedPresetId] ?? null : null;
 
   // Full edit mode state
   const [editMode, setEditMode] = useState(false);
@@ -486,11 +490,31 @@ export function PresetsPage() {
                         {isActive && <span className="text-green-400 ml-1.5">Active</span>}
                       </p>
                     </div>
-                    {preset.hotkey && (
-                      <span className="shrink-0 px-1.5 py-0.5 text-[11px] font-medium rounded bg-[var(--badge-bg)] text-text-secondary">
-                        {preset.hotkey}
-                      </span>
-                    )}
+                    {preset.hotkey && (() => {
+                      const status = hotkeyStatuses[preset.id];
+                      const broken = status === 'unsupported' || status === 'busy';
+                      return (
+                        <span
+                          title={
+                            broken
+                              ? status === 'busy'
+                                ? 'Taken by another app — click to pick a different shortcut'
+                                : 'Unsupported key combination'
+                              : undefined
+                          }
+                          className={`
+                            shrink-0 inline-flex items-center gap-1 px-1.5 py-0.5 text-[11px] font-medium rounded
+                            ${broken
+                              ? 'bg-red-500/10 text-red-400 border border-red-500/30'
+                              : 'bg-[var(--badge-bg)] text-text-secondary'
+                            }
+                          `}
+                        >
+                          {broken && <AlertTriangle size={10} className="shrink-0" />}
+                          {preset.hotkey}
+                        </span>
+                      );
+                    })()}
                   </div>
                 )}
               </motion.div>
@@ -666,6 +690,7 @@ export function PresetsPage() {
                         value={selectedPreset.hotkey}
                         onChange={(hotkey) => setHotkey(selectedPreset.id, hotkey)}
                         existingHotkeys={otherPresetHotkeys}
+                        registrationStatus={selectedHotkeyStatus}
                         className="flex-1 max-w-[280px]"
                       />
                     </div>
@@ -797,6 +822,11 @@ export function PresetsPage() {
                         value={editPresetHotkey}
                         onChange={(hotkey) => { setEditPresetHotkey(hotkey); setHasChanges(true); }}
                         existingHotkeys={otherPresetHotkeys}
+                        registrationStatus={
+                          !hasChanges && editPresetHotkey === selectedPreset.hotkey
+                            ? selectedHotkeyStatus
+                            : null
+                        }
                       />
                     </div>
                   </motion.div>

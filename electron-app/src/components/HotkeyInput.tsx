@@ -1,19 +1,38 @@
 import { useState, useCallback, useRef } from 'react';
 import { X, Keyboard, AlertTriangle } from 'lucide-react';
 import { formatKeyCombo } from '@/lib/hotkey';
+import type { HotkeyStatus } from '@/types';
 
 interface HotkeyInputProps {
   value: string | null;
   onChange: (hotkey: string | null) => void;
   existingHotkeys?: string[];
+  registrationStatus?: HotkeyStatus | null;
   className?: string;
 }
 
-export function HotkeyInput({ value, onChange, existingHotkeys = [], className = '' }: HotkeyInputProps) {
+const REGISTRATION_MESSAGES: Record<Exclude<HotkeyStatus, 'ok'>, string> = {
+  unsupported: 'This key combination cannot be used as a global shortcut. Try a different key.',
+  busy: 'Another application is already using this shortcut. Pick a different combination.',
+};
+
+export function HotkeyInput({
+  value,
+  onChange,
+  existingHotkeys = [],
+  registrationStatus = null,
+  className = '',
+}: HotkeyInputProps) {
   const [listening, setListening] = useState(false);
   const inputRef = useRef<HTMLDivElement>(null);
 
   const hasConflict = value != null && existingHotkeys.includes(value);
+  const hasRegistrationIssue =
+    value != null && registrationStatus != null && registrationStatus !== 'ok';
+  const registrationMessage =
+    hasRegistrationIssue && registrationStatus
+      ? REGISTRATION_MESSAGES[registrationStatus as Exclude<HotkeyStatus, 'ok'>]
+      : null;
 
   const handleKeyDown = useCallback(
     (e: React.KeyboardEvent) => {
@@ -58,9 +77,11 @@ export function HotkeyInput({ value, onChange, existingHotkeys = [], className =
           transition-all duration-150 outline-none
           ${listening
             ? 'border-accent bg-accent/5 shadow-fluent-focus'
-            : hasConflict
-              ? 'border-yellow-500/70 bg-yellow-500/5'
-              : 'border-border-default bg-[var(--input-bg)] hover:border-border-default/80'
+            : hasRegistrationIssue
+              ? 'border-red-500/60 bg-red-500/5'
+              : hasConflict
+                ? 'border-yellow-500/70 bg-yellow-500/5'
+                : 'border-border-default bg-[var(--input-bg)] hover:border-border-default/80'
           }
         `}
       >
@@ -68,8 +89,11 @@ export function HotkeyInput({ value, onChange, existingHotkeys = [], className =
         <span className={`text-body flex-1 ${value ? 'text-text-primary' : 'text-text-tertiary'}`}>
           {listening ? 'Press a key combination...' : value ?? 'None'}
         </span>
-        {hasConflict && !listening && (
-          <AlertTriangle size={13} className="text-yellow-500 shrink-0" />
+        {(hasRegistrationIssue || hasConflict) && !listening && (
+          <AlertTriangle
+            size={13}
+            className={`${hasRegistrationIssue ? 'text-red-400' : 'text-yellow-500'} shrink-0`}
+          />
         )}
         {value && !listening && (
           <button
@@ -80,11 +104,15 @@ export function HotkeyInput({ value, onChange, existingHotkeys = [], className =
           </button>
         )}
       </div>
-      {hasConflict && (
+      {hasRegistrationIssue && registrationMessage ? (
+        <p className="text-[11px] text-red-400 px-1 leading-snug">
+          {registrationMessage}
+        </p>
+      ) : hasConflict ? (
         <p className="text-[11px] text-yellow-500 px-1">
           Already used by another preset
         </p>
-      )}
+      ) : null}
     </div>
   );
 }

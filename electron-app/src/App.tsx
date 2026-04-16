@@ -10,6 +10,9 @@ import { usePresetStore } from '@/stores/presetStore';
 import { useSettingsStore } from '@/stores/settingsStore';
 import { ToastContainer } from '@/components/ToastContainer';
 import { BackendErrorScreen } from '@/components/BackendErrorScreen';
+import { UpdateBanner } from '@/components/UpdateBanner';
+import { useUpdateStore } from '@/stores/updateStore';
+import { useHotkeyStatusStore } from '@/stores/hotkeyStatusStore';
 
 class PageErrorBoundary extends Component<{ children: ReactNode }, { error: Error | null }> {
   constructor(props: { children: ReactNode }) {
@@ -70,6 +73,26 @@ export function App() {
   }, []);
 
   useEffect(() => {
+    if (!window.api) return;
+    const setInfo = useUpdateStore.getState().setInfo;
+    window.api.getLastUpdateInfo().then((cached) => {
+      if (cached) setInfo(cached);
+    });
+    const unsubscribe = window.api.onUpdateAvailable((info) => {
+      setInfo(info);
+    });
+    return unsubscribe;
+  }, []);
+
+  useEffect(() => {
+    if (!window.api) return;
+    const setStatuses = useHotkeyStatusStore.getState().setStatuses;
+    window.api.getHotkeyStatuses().then(setStatuses);
+    const unsubscribe = window.api.onHotkeyStatusesChanged(setStatuses);
+    return unsubscribe;
+  }, []);
+
+  useEffect(() => {
     if (!backendStatus.ready) return;
     fetchPresets();
     fetchCurrentDisplays();
@@ -104,6 +127,7 @@ export function App() {
       <main className="flex-1 flex flex-col overflow-hidden">
         {/* Drag region for frameless window */}
         <div className="h-[40px] shrink-0 app-drag-region" />
+        <UpdateBanner />
         <div className="flex-1 relative overflow-hidden">
           <AnimatePresence mode="sync">
             <motion.div

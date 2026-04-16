@@ -37,6 +37,20 @@ export interface Settings {
 
 export type Page = 'presets' | 'displays' | 'settings' | 'about';
 
+export interface UpdateInfo {
+  available: boolean;
+  currentVersion: string;
+  latestVersion: string | null;
+  releaseUrl: string | null;
+  releaseNotes: string | null;
+  publishedAt: string | null;
+  checkedAt: string;
+  error: string | null;
+}
+
+export type HotkeyStatus = 'ok' | 'unsupported' | 'busy';
+export type HotkeyStatusMap = Record<string, HotkeyStatus>;
+
 declare global {
   interface Window {
     api: {
@@ -59,10 +73,15 @@ declare global {
       openExternal: (url: string) => Promise<void>;
       getBackendStatus: () => Promise<{ ready: boolean; error: string | null }>;
       restartBackend: () => Promise<{ success: boolean; error?: string }>;
+      checkForUpdates: () => Promise<UpdateInfo>;
+      getLastUpdateInfo: () => Promise<UpdateInfo | null>;
+      getHotkeyStatuses: () => Promise<HotkeyStatusMap>;
       onBackendStatusChanged: (callback: (status: { ready: boolean; error: string | null }) => void) => () => void;
       onThemeChanged: (callback: (theme: 'dark' | 'light') => void) => () => void;
       onApplyPreset: (callback: (presetId: string) => void) => () => void;
       onSaveCurrentConfig: (callback: () => void) => () => void;
+      onUpdateAvailable: (callback: (info: UpdateInfo) => void) => () => void;
+      onHotkeyStatusesChanged: (callback: (statuses: HotkeyStatusMap) => void) => () => void;
     };
   }
 }
