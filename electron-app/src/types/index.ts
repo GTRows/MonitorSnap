@@ -13,6 +13,9 @@ export interface Monitor {
   nativeWidth?: number;
   nativeHeight?: number;
   colorDepth?: string;
+  devicePath?: string | null;
+  edidManufactureId?: number;
+  edidProductCodeId?: number;
 }
 
 export interface Preset {
@@ -65,13 +68,16 @@ declare global {
       deletePreset: (id: string) => Promise<{ success: boolean }>;
       renamePreset: (id: string, name: string) => Promise<{ success: boolean }>;
       duplicatePreset: (id: string) => Promise<{ success: boolean; id: string }>;
+      importPresets: (presets: Preset[]) => Promise<{ success: boolean; imported: number; skipped: number; error?: string }>;
+      clearAllPresets: () => Promise<{ success: boolean; deleted: number; error?: string }>;
       setHotkey: (presetId: string, hotkey: string | null) => Promise<{ success: boolean }>;
       getSettings: () => Promise<Settings>;
-      updateSettings: (settings: Partial<Settings>) => Promise<{ success: boolean }>;
+      updateSettings: (settings: Partial<Settings>) => Promise<{ success: boolean; settings?: Settings; error?: string }>;
       getTheme: () => Promise<'dark' | 'light'>;
       updateTrayPresets: (presets: Array<{ id: string; name: string }>) => Promise<{ success: boolean }>;
       openExternal: (url: string) => Promise<void>;
       getBackendStatus: () => Promise<{ ready: boolean; error: string | null }>;
+      hideWindow: () => Promise<void>;
       restartBackend: () => Promise<{ success: boolean; error?: string }>;
       checkForUpdates: () => Promise<UpdateInfo>;
       getLastUpdateInfo: () => Promise<UpdateInfo | null>;
@@ -80,6 +86,7 @@ declare global {
       onThemeChanged: (callback: (theme: 'dark' | 'light') => void) => () => void;
       onApplyPreset: (callback: (presetId: string) => void) => () => void;
       onSaveCurrentConfig: (callback: () => void) => () => void;
+      onPresetApplied: (callback: (presetId: string) => void) => () => void;
       onUpdateAvailable: (callback: (info: UpdateInfo) => void) => () => void;
       onHotkeyStatusesChanged: (callback: (statuses: HotkeyStatusMap) => void) => () => void;
     };

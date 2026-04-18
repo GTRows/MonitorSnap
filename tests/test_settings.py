@@ -47,6 +47,46 @@ def test_load_ignores_missing_keys(app_dir):
     assert s.enable_edit_mode is False  # default preserved
 
 
+def test_load_silently_drops_legacy_keys(app_dir):
+    """Legacy keys removed from the schema (e.g. remember_last_preset) must not
+    resurface as attributes after load."""
+    settings_path = app_dir / "settings.json"
+    settings_path.write_text(
+        json.dumps({
+            "theme_mode": "dark",
+            "remember_last_preset": True,
+            "last_applied_preset": "some-id",
+            "bogus_future_key": 42,
+        }),
+        encoding="utf-8",
+    )
+
+    s = Settings()
+    assert s.theme_mode == "dark"
+    assert not hasattr(s, "remember_last_preset")
+    assert not hasattr(s, "last_applied_preset")
+    assert not hasattr(s, "bogus_future_key")
+
+
+def test_save_writes_only_known_keys(app_dir):
+    s = Settings()
+    s.theme_mode = "light"
+    s.save()
+
+    on_disk = json.loads(s.file.read_text(encoding="utf-8"))
+    expected = {
+        "theme_mode",
+        "start_with_windows",
+        "start_minimized",
+        "notify_preset_applied",
+        "minimize_after_apply",
+        "esc_to_minimize",
+        "font_size_multiplier",
+        "enable_edit_mode",
+    }
+    assert set(on_disk.keys()) == expected
+
+
 def test_reset_to_defaults_clears_changes(app_dir):
     s = Settings()
     s.theme_mode = "dark"

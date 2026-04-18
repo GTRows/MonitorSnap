@@ -1,6 +1,7 @@
 import { create } from 'zustand';
 import type { Preset, Monitor } from '@/types';
 import { toast } from '@/stores/toastStore';
+import { useSettingsStore } from '@/stores/settingsStore';
 
 // Mock data for development without Electron
 const mockPresets: Preset[] = [
@@ -45,6 +46,14 @@ const mockDisplays: Monitor[] = [
 
 const api = window.api;
 const useMock = !api;
+
+// Shared post-apply side effects: toast + optional window hide. Called from
+// both renderer-initiated applyPreset and tray-triggered preset-applied IPC.
+export function notifyPresetApplied(presetName: string): void {
+  const { notifications, minimizeAfterApply } = useSettingsStore.getState().settings;
+  if (notifications) toast.success(`"${presetName}" applied`);
+  if (minimizeAfterApply && api) api.hideWindow();
+}
 
 interface PresetState {
   presets: Preset[];
@@ -95,13 +104,13 @@ export const usePresetStore = create<PresetState>((set, get) => ({
   applyPreset: async (id) => {
     const preset = get().presets.find((p) => p.id === id);
     if (useMock) {
-      toast.success(`"${preset?.name ?? id}" applied`);
+      notifyPresetApplied(preset?.name ?? id);
       return true;
     }
     const result = await api.applyPreset(id);
     if (result.success) {
       await get().fetchCurrentDisplays();
-      toast.success(`"${preset?.name ?? id}" applied`);
+      notifyPresetApplied(preset?.name ?? id);
     } else {
       toast.error(result.error ? `Apply failed: ${result.error}` : 'Failed to apply preset');
     }
@@ -280,29 +289,41 @@ export const usePresetStore = create<PresetState>((set, get) => ({
       const file = input.files?.[0];
       if (!file) return;
       const reader = new FileReader();
-      reader.onload = (e) => {
+      reader.onload = async (e) => {
+        let parsed: Preset[];
         try {
           const json = JSON.parse(e.target?.result as string);
-          const imported: Preset[] = Array.isArray(json) ? json : json?.presets;
-          if (!Array.isArray(imported)) throw new Error('Invalid format');
+          const raw = Array.isArray(json) ? json : json?.presets;
+          if (!Array.isArray(raw)) throw new Error('Invalid format');
+          parsed = raw.filter((p) => p && typeof p.name === 'string' && Array.isArray(p.monitors));
+        } catch {
+          toast.error('Import failed: invalid file format');
+          return;
+        }
+        if (parsed.length === 0) {
+          toast.error('Import failed: no valid presets found');
+          return;
+        }
+        if (useMock) {
           const { presets } = get();
           const merged = [...presets];
           let added = 0;
-          for (const p of imported) {
-            if (!p.id || !p.name || !Array.isArray(p.monitors)) continue;
+          for (const p of parsed) {
             const exists = merged.findIndex((x) => x.id === p.id);
-            if (exists >= 0) {
-              merged[exists] = p;
-            } else {
-              merged.push(p);
-              added++;
-            }
+            if (exists >= 0) merged[exists] = p;
+            else { merged.push(p); added++; }
           }
           set({ presets: merged });
           toast.success(`Imported ${added} new preset${added !== 1 ? 's' : ''}`);
-        } catch {
-          toast.error('Import failed: invalid file format');
+          return;
         }
+        const result = await api.importPresets(parsed);
+        if (!result.success) {
+          toast.error(result.error ? `Import failed: ${result.error}` : 'Failed to import presets');
+          return;
+        }
+        await get().fetchPresets();
+        toast.success(`Imported ${result.imported} preset${result.imported !== 1 ? 's' : ''}`);
       };
       reader.readAsText(file);
     };
@@ -316,12 +337,13 @@ export const usePresetStore = create<PresetState>((set, get) => ({
       toast.success(`Cleared ${presets.length} preset${presets.length !== 1 ? 's' : ''}`);
       return;
     }
-    for (const p of presets) {
-      await api.deletePreset(p.id);
+    const result = await api.clearAllPresets();
+    if (!result.success) {
+      toast.error(result.error ? `Clear failed: ${result.error}` : 'Failed to clear presets');
+      return;
     }
     set({ presets: [], selectedPresetId: null });
-    if (api) api.updateTrayPresets([]);
-    toast.success(`Cleared ${presets.length} preset${presets.length !== 1 ? 's' : ''}`);
+    toast.success(`Cleared ${result.deleted} preset${result.deleted !== 1 ? 's' : ''}`);
   },
 
   setHotkey: async (presetId, hotkey) => {

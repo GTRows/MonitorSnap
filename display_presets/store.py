@@ -1,4 +1,5 @@
 import json
+import os
 import uuid
 import datetime
 from display_presets.config import get_presets_dir
@@ -82,7 +83,69 @@ class PresetStore:
             hotkey=None,
         )
 
+    def delete_all(self):
+        deleted = 0
+        for f in self.dir.glob("*.json"):
+            try:
+                uuid.UUID(f.stem)
+            except ValueError:
+                continue
+            try:
+                f.unlink()
+                deleted += 1
+            except OSError:
+                pass
+        return deleted
+
+    def import_many(self, presets):
+        """Import a list of preset dicts. Returns (imported_count, skipped_count).
+        Preserves the incoming id if it is a valid UUID and writes the file
+        directly; invalid or missing ids get a freshly generated UUID. Any
+        existing file with the same id is overwritten. Imported presets keep
+        their monitors but start without a raw display config; the user must
+        re-capture the layout on this machine before they can be applied."""
+        imported = 0
+        skipped = 0
+        now = datetime.datetime.now().isoformat()
+        for p in presets:
+            if not isinstance(p, dict):
+                skipped += 1
+                continue
+            name = p.get('name')
+            monitors = p.get('monitors')
+            if not isinstance(name, str) or not name.strip() or not isinstance(monitors, list):
+                skipped += 1
+                continue
+            hotkey = p.get('hotkey') if isinstance(p.get('hotkey'), str) else None
+            preset_id = p.get('id') if isinstance(p.get('id'), str) else None
+            if preset_id:
+                try:
+                    uuid.UUID(preset_id)
+                except ValueError:
+                    preset_id = None
+            if not preset_id:
+                preset_id = str(uuid.uuid4())
+            record = {
+                'id': preset_id,
+                'name': name.strip(),
+                'hotkey': hotkey,
+                'monitors': monitors,
+                'config': None,
+                'createdAt': p.get('createdAt') if isinstance(p.get('createdAt'), str) else now,
+                'updatedAt': now,
+            }
+            self._write(preset_id, record)
+            imported += 1
+        return imported, skipped
+
     def _write(self, preset_id, data):
+        # Ensure the presets directory exists (user may have deleted it at
+        # runtime) and write atomically via a temp file + rename.
+        self.dir.mkdir(parents=True, exist_ok=True)
         path = self.dir / f"{preset_id}.json"
-        with open(path, 'w', encoding='utf-8') as f:
+        tmp = path.with_suffix(path.suffix + '.tmp')
+        with open(tmp, 'w', encoding='utf-8') as f:
             json.dump(data, f, indent=2)
+            f.flush()
+            os.fsync(f.fileno())
+        os.replace(tmp, path)

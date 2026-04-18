@@ -6,7 +6,7 @@ import { DisplaysPage } from '@/pages/DisplaysPage';
 import { SettingsPage } from '@/pages/SettingsPage';
 import { AboutPage } from '@/pages/AboutPage';
 import { useAppStore } from '@/stores/appStore';
-import { usePresetStore } from '@/stores/presetStore';
+import { notifyPresetApplied, usePresetStore } from '@/stores/presetStore';
 import { useSettingsStore } from '@/stores/settingsStore';
 import { ToastContainer } from '@/components/ToastContainer';
 import { BackendErrorScreen } from '@/components/BackendErrorScreen';
@@ -92,6 +92,27 @@ export function App() {
     return unsubscribe;
   }, []);
 
+  // Tray-triggered actions. Listen globally so they work from any page.
+  useEffect(() => {
+    if (!window.api) return;
+    const { setPage, setPendingAction } = useAppStore.getState();
+    const applyPreset = usePresetStore.getState().applyPreset;
+    const fetchCurrentDisplays = usePresetStore.getState().fetchCurrentDisplays;
+    const unsubApply = window.api.onApplyPreset((presetId) => {
+      applyPreset(presetId);
+    });
+    const unsubSave = window.api.onSaveCurrentConfig(() => {
+      setPage('presets');
+      setPendingAction('new-preset');
+    });
+    const unsubApplied = window.api.onPresetApplied((presetId) => {
+      fetchCurrentDisplays();
+      const preset = usePresetStore.getState().presets.find((p) => p.id === presetId);
+      notifyPresetApplied(preset?.name ?? presetId);
+    });
+    return () => { unsubApply(); unsubSave(); unsubApplied(); };
+  }, []);
+
   useEffect(() => {
     if (!backendStatus.ready) return;
     fetchPresets();
@@ -103,6 +124,33 @@ export function App() {
   useEffect(() => {
     document.documentElement.classList.toggle('dark', resolvedTheme === 'dark');
   }, [resolvedTheme]);
+
+  // Apply font scale to the root element so rem-based typography scales.
+  const fontScale = useSettingsStore((s) => s.settings.fontScale);
+  useEffect(() => {
+    const safe = Number.isFinite(fontScale) && fontScale > 0 ? fontScale : 1;
+    document.documentElement.style.fontSize = `${16 * safe}px`;
+    return () => { document.documentElement.style.fontSize = ''; };
+  }, [fontScale]);
+
+  // Escape-to-minimize: pressing Escape outside any input or modal hides the
+  // window when the setting is on. Inputs/textareas and contenteditable get
+  // their own Escape handling (cancel rename, close context menu, etc.) so we
+  // skip those cases.
+  const escToMinimize = useSettingsStore((s) => s.settings.escToMinimize);
+  useEffect(() => {
+    if (!escToMinimize || !window.api) return;
+    const handler = (e: KeyboardEvent) => {
+      if (e.key !== 'Escape' || e.defaultPrevented) return;
+      const target = e.target as HTMLElement | null;
+      if (!target) return;
+      const tag = target.tagName;
+      if (tag === 'INPUT' || tag === 'TEXTAREA' || target.isContentEditable) return;
+      window.api.hideWindow();
+    };
+    window.addEventListener('keydown', handler);
+    return () => window.removeEventListener('keydown', handler);
+  }, [escToMinimize]);
 
   // Listen for system theme changes
   useEffect(() => {

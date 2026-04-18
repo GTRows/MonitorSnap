@@ -1,5 +1,6 @@
 import { create } from 'zustand';
 import type { Settings } from '@/types';
+import { toast } from '@/stores/toastStore';
 
 const api = window.api;
 const useMock = !api;
@@ -47,7 +48,8 @@ export const useSettingsStore = create<SettingsState>((set, get) => ({
   },
 
   updateSettings: async (partial) => {
-    const newSettings = { ...get().settings, ...partial };
+    const previousSettings = get().settings;
+    const newSettings = { ...previousSettings, ...partial };
     set({ settings: newSettings });
 
     if (partial.theme) {
@@ -65,7 +67,13 @@ export const useSettingsStore = create<SettingsState>((set, get) => ({
     }
 
     if (!useMock) {
-      await api.updateSettings(newSettings);
+      const result = await api.updateSettings(newSettings);
+      if (!result.success) {
+        set({ settings: result.settings ?? previousSettings });
+        toast.error(result.error ?? 'Failed to update settings');
+      } else if (result.settings) {
+        set({ settings: result.settings });
+      }
     }
   },
 

@@ -8,6 +8,7 @@ import {
 import { usePresetStore } from '@/stores/presetStore';
 import { useSettingsStore } from '@/stores/settingsStore';
 import { useHotkeyStatusStore } from '@/stores/hotkeyStatusStore';
+import { useAppStore } from '@/stores/appStore';
 import { MonitorCanvas } from '@/components/MonitorCanvas';
 import { MonitorEditPanel } from '@/components/MonitorEditPanel';
 import { HotkeyInput } from '@/components/HotkeyInput';
@@ -316,17 +317,15 @@ export function PresetsPage() {
     }
   };
 
-  // Tray IPC events
+  // Consume pending actions queued from outside the React tree (e.g. tray).
+  const pendingAction = useAppStore((s) => s.pendingAction);
+  const consumePendingAction = useAppStore((s) => s.consumePendingAction);
   useEffect(() => {
-    if (!window.api) return;
-    const unsubApply = window.api.onApplyPreset((presetId) => {
-      applyPreset(presetId);
-    });
-    const unsubSave = window.api.onSaveCurrentConfig(() => {
+    if (pendingAction === 'new-preset') {
       setShowNewInput(true);
-    });
-    return () => { unsubApply(); unsubSave(); };
-  }, [applyPreset]);
+      consumePendingAction();
+    }
+  }, [pendingAction, consumePendingAction]);
 
   // Keyboard shortcuts
   useEffect(() => {
@@ -337,7 +336,7 @@ export function PresetsPage() {
       if (editMode) {
         if (e.ctrlKey && e.key === 'z' && !isInput) { e.preventDefault(); handleUndo(); return; }
         if (e.ctrlKey && e.key === 'y' && !isInput) { e.preventDefault(); handleRedo(); return; }
-        if (e.key === 'Escape' && !isInput) { exitEditMode(); return; }
+        if (e.key === 'Escape' && !isInput) { e.preventDefault(); exitEditMode(); return; }
         if (e.ctrlKey && e.key === 's' && !isInput) { e.preventDefault(); if (hasChanges && layoutValid) handleSaveEdit(); return; }
         return;
       }

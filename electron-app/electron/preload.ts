@@ -11,6 +11,9 @@ export interface Monitor {
   rotation: number;
   isPrimary: boolean;
   scaleFactor: number;
+  devicePath?: string | null;
+  edidManufactureId?: number;
+  edidProductCodeId?: number;
 }
 
 export interface Preset {
@@ -58,13 +61,16 @@ const api = {
   deletePreset: (id: string): Promise<{ success: boolean }> => ipcRenderer.invoke('delete-preset', id),
   renamePreset: (id: string, name: string): Promise<{ success: boolean }> => ipcRenderer.invoke('rename-preset', id, name),
   duplicatePreset: (id: string): Promise<{ success: boolean; id: string }> => ipcRenderer.invoke('duplicate-preset', id),
+  importPresets: (presets: Preset[]): Promise<{ success: boolean; imported: number; skipped: number; error?: string }> => ipcRenderer.invoke('import-presets', presets),
+  clearAllPresets: (): Promise<{ success: boolean; deleted: number; error?: string }> => ipcRenderer.invoke('clear-all-presets'),
   setHotkey: (presetId: string, hotkey: string | null): Promise<{ success: boolean }> => ipcRenderer.invoke('set-hotkey', presetId, hotkey),
   getSettings: (): Promise<Settings> => ipcRenderer.invoke('get-settings'),
-  updateSettings: (settings: Partial<Settings>): Promise<{ success: boolean }> => ipcRenderer.invoke('update-settings', settings),
+  updateSettings: (settings: Partial<Settings>): Promise<{ success: boolean; settings?: Settings; error?: string }> => ipcRenderer.invoke('update-settings', settings),
   getTheme: (): Promise<'dark' | 'light'> => ipcRenderer.invoke('get-theme'),
   updateTrayPresets: (presets: Array<{ id: string; name: string }>): Promise<{ success: boolean }> => ipcRenderer.invoke('update-tray-presets', presets),
   openExternal: (url: string): Promise<void> => ipcRenderer.invoke('open-external', url),
   getBackendStatus: (): Promise<{ ready: boolean; error: string | null }> => ipcRenderer.invoke('get-backend-status'),
+  hideWindow: (): Promise<void> => ipcRenderer.invoke('hide-window'),
   restartBackend: (): Promise<{ success: boolean; error?: string }> => ipcRenderer.invoke('restart-backend'),
   checkForUpdates: (): Promise<UpdateInfo> => ipcRenderer.invoke('check-for-updates'),
   getLastUpdateInfo: (): Promise<UpdateInfo | null> => ipcRenderer.invoke('get-last-update-info'),
@@ -105,6 +111,12 @@ const api = {
     const handler = () => callback();
     ipcRenderer.on('save-current-config', handler);
     return () => ipcRenderer.removeListener('save-current-config', handler);
+  },
+
+  onPresetApplied: (callback: (presetId: string) => void) => {
+    const handler = (_event: Electron.IpcRendererEvent, presetId: string) => callback(presetId);
+    ipcRenderer.on('preset-applied', handler);
+    return () => ipcRenderer.removeListener('preset-applied', handler);
   },
 };
 

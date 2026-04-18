@@ -115,3 +115,63 @@ def test_duplicate_creates_copy_with_new_id_and_no_hotkey(app_dir):
 def test_duplicate_returns_none_for_missing(app_dir):
     store = PresetStore()
     assert store.duplicate("missing") is None
+
+
+def test_delete_all_removes_every_uuid_file_and_reports_count(app_dir):
+    store = PresetStore()
+    store.create(name="A", monitors=[])
+    store.create(name="B", monitors=[])
+    store.create(name="C", monitors=[])
+    (store.dir / "not-a-uuid.json").write_text("{}", encoding="utf-8")
+
+    deleted = store.delete_all()
+
+    assert deleted == 3
+    assert store.list_all() == []
+    # Non-UUID file is preserved.
+    assert (store.dir / "not-a-uuid.json").exists()
+
+
+def test_import_many_preserves_valid_uuid_ids(app_dir):
+    store = PresetStore()
+    known_id = str(uuid.uuid4())
+    imported, skipped = store.import_many([
+        {"id": known_id, "name": "Imported", "monitors": [{"id": "m1"}], "hotkey": "Ctrl+F1"}
+    ])
+    assert (imported, skipped) == (1, 0)
+    assert store.get(known_id)["name"] == "Imported"
+    assert store.get(known_id)["hotkey"] == "Ctrl+F1"
+    assert store.get(known_id)["config"] is None
+
+
+def test_import_many_generates_new_id_for_invalid_uuid(app_dir):
+    store = PresetStore()
+    imported, skipped = store.import_many([
+        {"id": "not-a-uuid", "name": "X", "monitors": []}
+    ])
+    assert (imported, skipped) == (1, 0)
+    presets = store.list_all()
+    assert len(presets) == 1
+    uuid.UUID(presets[0]["id"])
+
+
+def test_import_many_overwrites_existing_id(app_dir):
+    store = PresetStore()
+    original = store.create(name="Old", monitors=[])
+    imported, skipped = store.import_many([
+        {"id": original["id"], "name": "New", "monitors": [{"id": "m1"}]}
+    ])
+    assert (imported, skipped) == (1, 0)
+    assert store.get(original["id"])["name"] == "New"
+
+
+def test_import_many_skips_invalid_entries(app_dir):
+    store = PresetStore()
+    imported, skipped = store.import_many([
+        None,
+        {"name": "NoMonitors"},
+        {"monitors": []},
+        {"name": "", "monitors": []},
+        {"name": "OK", "monitors": []},
+    ])
+    assert (imported, skipped) == (1, 4)

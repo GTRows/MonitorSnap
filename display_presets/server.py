@@ -108,6 +108,15 @@ class _Handler(BaseHTTPRequestHandler):
             preset = _store.create(name=name, monitors=monitors, config=config)
             self._json(_strip_config(preset))
 
+        # POST /presets/import  – persist a list of imported presets
+        elif method == 'POST' and parts == ['presets', 'import']:
+            body = self._read_body()
+            incoming = body.get('presets')
+            if not isinstance(incoming, list):
+                return self._err('presets array required')
+            imported, skipped = _store.import_many(incoming)
+            self._json({'imported': imported, 'skipped': skipped})
+
         # GET /presets/:id
         elif method == 'GET' and len(parts) == 2 and parts[0] == 'presets':
             preset = _store.get(parts[1])
@@ -133,6 +142,11 @@ class _Handler(BaseHTTPRequestHandler):
                     _log.exception('rebuild_config_for_monitors failed')
             preset = _store.update(parts[1], updates)
             self._json(_strip_config(preset))
+
+        # DELETE /presets  – remove all presets at once
+        elif method == 'DELETE' and parts == ['presets']:
+            deleted = _store.delete_all()
+            self._json({'deleted': deleted})
 
         # DELETE /presets/:id
         elif method == 'DELETE' and len(parts) == 2 and parts[0] == 'presets':
@@ -259,11 +273,19 @@ class _Handler(BaseHTTPRequestHandler):
             if 'theme' in body:
                 _settings.theme_mode = body['theme']
             if 'startWithWindows' in body:
-                _settings.start_with_windows = body['startWithWindows']
-                if body['startWithWindows']:
-                    autostart.enable()
-                else:
-                    autostart.disable()
+                prev = _settings.start_with_windows
+                desired = bool(body['startWithWindows'])
+                try:
+                    if desired:
+                        autostart.enable()
+                    else:
+                        autostart.disable()
+                    _settings.start_with_windows = desired
+                except OSError as e:
+                    _log.exception('autostart toggle failed')
+                    _settings.start_with_windows = prev
+                    self._err(f'Autostart update failed: {e}', 500)
+                    return
             if 'startMinimized' in body:
                 _settings.start_minimized = body['startMinimized']
             if 'minimizeAfterApply' in body:

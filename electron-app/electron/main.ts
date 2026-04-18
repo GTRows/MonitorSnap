@@ -8,6 +8,17 @@ let tray: Tray | null = null;
 let pythonProcess: ChildProcess | null = null;
 let backendPort: number | null = null;
 
+let readyToShowFired = false;
+let initialShowResolved = false;
+let startHiddenAtLaunch = false;
+
+function maybeShowInitialWindow(): void {
+  if (initialShowResolved || !readyToShowFired || !mainWindow) return;
+  initialShowResolved = true;
+  if (startHiddenAtLaunch) return;
+  mainWindow.show();
+}
+
 interface BackendStatus {
   ready: boolean;
   error: string | null;
@@ -236,37 +247,67 @@ function apiDelete(urlPath: string) {
 type HotkeyStatus = 'ok' | 'unsupported' | 'busy';
 let hotkeyStatuses: Record<string, HotkeyStatus> = {};
 
+// presetId -> accelerator currently bound for that preset. Used to diff
+// against the desired set so we only unregister changed bindings instead of
+// clearing everything on each update (which leaves a brief window where
+// hotkeys are unbound).
+const registeredAccelerators = new Map<string, string>();
+
 function setHotkeyStatuses(next: Record<string, HotkeyStatus>): void {
   hotkeyStatuses = next;
   mainWindow?.webContents.send('hotkey-statuses-changed', next);
 }
 
 async function registerAllHotkeys(): Promise<void> {
-  globalShortcut.unregisterAll();
   const statuses: Record<string, HotkeyStatus> = {};
+  const desired = new Map<string, string>();
+  let presets: Array<{ id: string; hotkey: string | null; name: string }>;
   try {
-    const presets = await api('/presets') as Array<{ id: string; hotkey: string | null; name: string }>;
-    for (const p of presets) {
-      if (!p.hotkey) continue;
-      const accel = toAccelerator(p.hotkey);
-      if (!accel) {
-        statuses[p.id] = 'unsupported';
-        console.warn(`[hotkey] Cannot register "${p.hotkey}" for preset "${p.name}": unsupported key`);
-        continue;
-      }
-      const ok = globalShortcut.register(accel, () => {
-        apiPost(`/presets/${p.id}/apply`).catch((e) => console.error('[hotkey] apply failed:', e));
-      });
-      if (!ok) {
-        statuses[p.id] = 'busy';
-        console.warn(`[hotkey] Failed to register "${accel}" for preset "${p.name}" (may be taken by another app)`);
-      } else {
-        statuses[p.id] = 'ok';
-      }
-    }
+    presets = await api('/presets') as Array<{ id: string; hotkey: string | null; name: string }>;
   } catch (e) {
     console.error('[hotkey] Could not load presets for registration:', e);
+    setHotkeyStatuses(statuses);
+    return;
   }
+
+  for (const p of presets) {
+    if (!p.hotkey) continue;
+    const accel = toAccelerator(p.hotkey);
+    if (!accel) {
+      statuses[p.id] = 'unsupported';
+      console.warn(`[hotkey] Cannot register "${p.hotkey}" for preset "${p.name}": unsupported key`);
+      continue;
+    }
+    desired.set(p.id, accel);
+  }
+
+  // Unregister anything that's no longer desired or whose accelerator changed.
+  for (const [presetId, prevAccel] of registeredAccelerators) {
+    if (desired.get(presetId) !== prevAccel) {
+      globalShortcut.unregister(prevAccel);
+      registeredAccelerators.delete(presetId);
+    }
+  }
+
+  // Register new or changed bindings. Skip ones already registered.
+  for (const [presetId, accel] of desired) {
+    if (registeredAccelerators.get(presetId) === accel) {
+      statuses[presetId] = 'ok';
+      continue;
+    }
+    const preset = presets.find((p) => p.id === presetId);
+    const ok = globalShortcut.register(accel, () => {
+      apiPost(`/presets/${presetId}/apply`).catch((e) => console.error('[hotkey] apply failed:', e));
+    });
+    if (!ok) {
+      statuses[presetId] = 'busy';
+      console.warn(`[hotkey] Failed to register "${accel}" for preset "${preset?.name}" (may be taken by another app)`);
+    } else {
+      statuses[presetId] = 'ok';
+      registeredAccelerators.set(presetId, accel);
+    }
+  }
+
   setHotkeyStatuses(statuses);
 }
 
@@ -298,7 +339,14 @@ function createWindow(): void {
   });
 
   mainWindow.once('ready-to-show', () => {
-    mainWindow?.show();
+    readyToShowFired = true;
+    maybeShowInitialWindow();
+  });
+
+  // When the renderer finishes loading (including reloads during dev), replay
+  // the last backend status so subscribers never miss the startup transition.
+  mainWindow.webContents.on('did-finish-load', () => {
+    mainWindow?.webContents.send('backend-status-changed', backendStatus);
   });
 
   if (isDev) {
@@ -321,30 +369,60 @@ function createWindow(): void {
 // Tray
 // ---------------------------------------------------------------------------
 
+function showAndFocusWindow(): void {
+  if (!mainWindow) return;
+  if (mainWindow.isMinimized()) mainWindow.restore();
+  mainWindow.show();
+  mainWindow.focus();
+}
+
+function resolveTrayIcon(): Electron.NativeImage {
+  // Prefer theme-specific icons when shipped; fall back to the generic one.
+  const publicDir = path.join(__dirname, '../public');
+  const variant = nativeTheme.shouldUseDarkColors ? 'tray-icon-light.png' : 'tray-icon-dark.png';
+  for (const name of [variant, 'tray-icon.png']) {
+    const candidate = nativeImage.createFromPath(path.join(publicDir, name));
+    if (!candidate.isEmpty()) return candidate;
+  }
+  return nativeImage.createEmpty();
+}
+
 function createTray(): void {
-  const iconPath = path.join(__dirname, '../public/tray-icon.png');
-  const icon = nativeImage.createFromPath(iconPath);
-  tray = new Tray(icon);
+  tray = new Tray(resolveTrayIcon());
   tray.setToolTip('DisplayPresets');
   updateTrayMenu([]);
-  tray.on('double-click', () => {
-    mainWindow?.show();
-    mainWindow?.focus();
+  tray.on('click', () => {
+    if (mainWindow && mainWindow.isVisible() && mainWindow.isFocused()) {
+      mainWindow.hide();
+    } else {
+      showAndFocusWindow();
+    }
   });
+  tray.on('double-click', showAndFocusWindow);
+  nativeTheme.on('updated', () => {
+    tray?.setImage(resolveTrayIcon());
+  });
+}
+
+async function applyPresetFromTray(presetId: string): Promise<void> {
+  try {
+    await apiPost(`/presets/${presetId}/apply`);
+    mainWindow?.webContents.send('preset-applied', presetId);
+  } catch (e) {
+    console.error('[tray] apply failed:', e);
+  }
 }
 
 function updateTrayMenu(presets: Array<{ id: string; name: string }>): void {
   const presetItems: Electron.MenuItemConstructorOptions[] = presets.map((p) => ({
     label: p.name,
-    click: () => {
-      mainWindow?.webContents.send('apply-preset', p.id);
-    },
+    click: () => { applyPresetFromTray(p.id); },
   }));
 
   const contextMenu = Menu.buildFromTemplate([
     {
       label: 'Open DisplayPresets',
-      click: () => { mainWindow?.show(); mainWindow?.focus(); },
+      click: showAndFocusWindow,
     },
     { type: 'separator' },
     ...(presetItems.length > 0
@@ -356,8 +434,8 @@ function updateTrayMenu(presets: Array<{ id: string; name: string }>): void {
     {
       label: 'Save Current Config',
       click: () => {
+        showAndFocusWindow();
         mainWindow?.webContents.send('save-current-config');
-        mainWindow?.show();
       },
     },
     { type: 'separator' },
@@ -371,6 +449,16 @@ function updateTrayMenu(presets: Array<{ id: string; name: string }>): void {
   ]);
 
   tray?.setContextMenu(contextMenu);
+}
+
+async function refreshTrayMenu(): Promise<void> {
+  if (!tray) return;
+  try {
+    const presets = await api('/presets') as Array<{ id: string; name: string }>;
+    updateTrayMenu(presets.map((p) => ({ id: p.id, name: p.name })));
+  } catch (e) {
+    console.error('[tray] refresh failed:', e);
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -427,6 +515,7 @@ function registerIpcHandlers(): void {
   ipcMain.handle('save-preset', async (_event, preset: { name: string }) => {
     try {
       const result = await apiPost('/presets', preset) as { id: string };
+      await refreshTrayMenu();
       return { success: true, id: result.id };
     } catch (e) {
       return { success: false, error: String(e) };
@@ -437,6 +526,7 @@ function registerIpcHandlers(): void {
     try {
       await apiPut(`/presets/${presetId}`, data);
       await registerAllHotkeys();
+      await refreshTrayMenu();
       return { success: true };
     } catch (e) {
       return { success: false, error: String(e) };
@@ -447,6 +537,7 @@ function registerIpcHandlers(): void {
     try {
       await apiDelete(`/presets/${presetId}`);
       await registerAllHotkeys();
+      await refreshTrayMenu();
       return { success: true };
     } catch (e) {
       return { success: false, error: String(e) };
@@ -456,6 +547,7 @@ function registerIpcHandlers(): void {
   ipcMain.handle('rename-preset', async (_event, presetId: string, newName: string) => {
     try {
       await apiPatch(`/presets/${presetId}/name`, { name: newName });
+      await refreshTrayMenu();
       return { success: true };
     } catch (e) {
       return { success: false, error: String(e) };
@@ -465,9 +557,30 @@ function registerIpcHandlers(): void {
   ipcMain.handle('duplicate-preset', async (_event, presetId: string) => {
     try {
       const result = await apiPost(`/presets/${presetId}/duplicate`) as { id: string };
+      await refreshTrayMenu();
       return { success: true, id: result.id };
     } catch (e) {
       return { success: false, error: String(e) };
+    }
+  });
+
+  ipcMain.handle('import-presets', async (_event, presets: unknown) => {
+    try {
+      const result = await apiPost('/presets/import', { presets }) as { imported: number; skipped: number };
+      await refreshTrayMenu();
+      return { success: true, imported: result.imported, skipped: result.skipped };
+    } catch (e) {
+      return { success: false, imported: 0, skipped: 0, error: e instanceof Error ? e.message : String(e) };
+    }
+  });
+
+  ipcMain.handle('clear-all-presets', async () => {
+    try {
+      const result = await apiDelete('/presets') as { deleted: number };
+      await refreshTrayMenu();
+      return { success: true, deleted: result.deleted };
+    } catch (e) {
+      return { success: false, deleted: 0, error: e instanceof Error ? e.message : String(e) };
     }
   });
 
@@ -498,10 +611,10 @@ function registerIpcHandlers(): void {
 
   ipcMain.handle('update-settings', async (_event, settings: unknown) => {
     try {
-      await apiPut('/settings', settings);
-      return { success: true };
+      const updated = await apiPut('/settings', settings);
+      return { success: true, settings: updated };
     } catch (e) {
-      return { success: false, error: String(e) };
+      return { success: false, error: e instanceof Error ? e.message : String(e) };
     }
   });
 
@@ -519,6 +632,10 @@ function registerIpcHandlers(): void {
   });
 
   ipcMain.handle('get-backend-status', () => backendStatus);
+
+  ipcMain.handle('hide-window', () => {
+    mainWindow?.hide();
+  });
 
   ipcMain.handle('check-for-updates', async () => {
     return runUpdateCheck(false);
@@ -561,13 +678,23 @@ app.whenReady().then(async () => {
     await startPythonBackend();
     console.log(`Python backend ready on port ${backendPort}`);
     setBackendStatus({ ready: true, error: null });
+    try {
+      const settings = await api('/settings') as { startMinimized?: boolean };
+      startHiddenAtLaunch = !!settings?.startMinimized;
+    } catch {
+      startHiddenAtLaunch = false;
+    }
+    maybeShowInitialWindow();
     await registerAllHotkeys();
+    await refreshTrayMenu();
   } catch (err) {
     console.error('Python backend failed to start:', err);
     setBackendStatus({
       ready: false,
       error: err instanceof Error ? err.message : String(err),
     });
+    startHiddenAtLaunch = false;
+    maybeShowInitialWindow();
   }
 
   setTimeout(() => {

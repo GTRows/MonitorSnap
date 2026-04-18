@@ -5,6 +5,14 @@ const shiftedToBase: Record<string, string> = {
   '>': '.', '?': '/', '~': '`', '|': '\\',
 };
 
+// Keys that can be used as a standalone global hotkey without modifiers.
+// Must match STANDALONE_KEYS in electron/hotkey.ts.
+const STANDALONE_KEYS = new Set<string>([
+  ...Array.from({ length: 24 }, (_, i) => `F${i + 1}`),
+  'MediaPlayPause', 'MediaStop', 'MediaTrackNext', 'MediaTrackPrevious',
+  'AudioVolumeUp', 'AudioVolumeDown', 'AudioVolumeMute',
+]);
+
 export interface KeyComboInput {
   key: string;
   ctrlKey: boolean;
@@ -36,7 +44,8 @@ export function formatKeyCombo(e: KeyComboInput): string | null {
     parts.push(key);
   }
 
-  if (parts.length < 2) return null;
+  const hasModifier = parts.length > 1;
+  if (!hasModifier && !STANDALONE_KEYS.has(key)) return null;
 
   return parts.join('+');
 }

@@ -40,7 +40,9 @@ _DisplayConfigGetDeviceInfo.argtypes = [c_void_p]
 _DisplayConfigGetDeviceInfo.restype = wintypes.LONG
 
 
-def _get_monitor_name(adapter_id: dict, target_id: int) -> str | None:
+def _get_monitor_device_info(adapter_id: dict, target_id: int) -> dict:
+    """Return a dict with friendly name, device path, and EDID identifiers for
+    the monitor at the given adapter/target. Missing fields are None / empty."""
     info = _TargetDeviceName()
     info.header.type = DISPLAYCONFIG_DEVICE_INFO_GET_TARGET_NAME
     info.header.size = ctypes.sizeof(_TargetDeviceName)
@@ -48,10 +50,20 @@ def _get_monitor_name(adapter_id: dict, target_id: int) -> str | None:
     info.header.adapterId.HighPart = adapter_id['HighPart']
     info.header.id = target_id
     result = _DisplayConfigGetDeviceInfo(ctypes.addressof(info))
-    if result == 0:
-        name = info.monitorFriendlyDeviceName
-        return name.strip() if name else None
-    return None
+    if result != 0:
+        return {'name': None, 'devicePath': None, 'edidManufactureId': 0, 'edidProductCodeId': 0}
+    name = info.monitorFriendlyDeviceName
+    device_path = info.monitorDevicePath
+    return {
+        'name': name.strip() if name else None,
+        'devicePath': device_path.strip() if device_path else None,
+        'edidManufactureId': int(info.edidManufactureId),
+        'edidProductCodeId': int(info.edidProductCodeId),
+    }
+
+
+def _get_monitor_name(adapter_id: dict, target_id: int) -> str | None:
+    return _get_monitor_device_info(adapter_id, target_id).get('name')
 
 
 # ---------------------------------------------------------------------------
@@ -153,7 +165,8 @@ def get_current_displays() -> list[dict]:
         rotation = _ROTATION_MAP.get(tgt.get('rotation', 1), 0)
         is_primary = (x == 0 and y == 0)
 
-        name = _get_monitor_name(tgt['adapterId'], tgt['id'])
+        device_info = _get_monitor_device_info(tgt['adapterId'], tgt['id'])
+        name = device_info.get('name')
         if not name:
             name = f'Display {len(monitors) + 1}'
 
@@ -185,6 +198,9 @@ def get_current_displays() -> list[dict]:
             'nativeWidth': native_w,
             'nativeHeight': native_h,
             'colorDepth': color_depth,
+            'devicePath': device_info.get('devicePath'),
+            'edidManufactureId': device_info.get('edidManufactureId', 0),
+            'edidProductCodeId': device_info.get('edidProductCodeId', 0),
         })
 
     return monitors

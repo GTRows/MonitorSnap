@@ -27,12 +27,23 @@ describe('toAccelerator', () => {
     expect(toAccelerator('Ctrl+?')).toBeNull();
   });
 
-  it('rejects combos with no modifier', () => {
+  it('rejects letter keys with no modifier', () => {
     expect(toAccelerator('A')).toBeNull();
   });
 
   it('rejects empty input', () => {
     expect(toAccelerator('')).toBeNull();
+  });
+
+  it('allows function keys without modifier', () => {
+    expect(toAccelerator('F12')).toBe('F12');
+    expect(toAccelerator('F1')).toBe('F1');
+  });
+
+  it('allows media keys without modifier', () => {
+    expect(toAccelerator('MediaPlayPause')).toBe('MediaPlayPause');
+    expect(toAccelerator('MediaTrackNext')).toBe('MediaNextTrack');
+    expect(toAccelerator('AudioVolumeMute')).toBe('VolumeMute');
   });
 
   it('maps ArrowUp to Up', () => {

@@ -387,8 +387,11 @@ class DisplayConfigManager:
         group and will be assigned the same source mode (and the same sourceInfo.id).
         Monitors with unique positions are extended and receive independent sources.
 
-        Each monitor must have id='monitor_N' where N is the corresponding path
-        index in config['paths'] — this is the convention used by get_current_displays().
+        Monitors are matched to path indices in this order:
+          1. By monitor devicePath (stable identity — survives USB replug and
+             driver re-enumeration that shifts path ordering).
+          2. By id='monitor_N' where N is the path index (legacy fallback for
+             presets saved before devicePath was captured).
         """
         import copy
 
@@ -398,17 +401,51 @@ class DisplayConfigManager:
 
         _INVALID = 0xFFFFFFFF
 
-        # Build path_idx -> monitor map
-        idx_to_mon = {}
-        for m in monitors:
-            mid = m.get('id', '')
-            if isinstance(mid, str) and mid.startswith('monitor_'):
+        # Resolve the current devicePath for every path index in the config,
+        # so we can match incoming monitors by stable identity first.
+        try:
+            from display_presets.displays import _get_monitor_device_info
+        except ImportError:
+            _get_monitor_device_info = None
+
+        path_device_paths: dict = {}
+        if _get_monitor_device_info is not None:
+            for i, p in enumerate(paths):
+                tgt = p.get('targetInfo') or {}
+                adapter = tgt.get('adapterId')
+                target_id = tgt.get('id')
+                if not isinstance(adapter, dict) or not isinstance(target_id, int):
+                    continue
                 try:
-                    idx = int(mid.split('_', 1)[1])
-                    if 0 <= idx < len(paths):
-                        idx_to_mon[idx] = m
-                except (ValueError, IndexError):
+                    info = _get_monitor_device_info(adapter, target_id)
+                    dp = info.get('devicePath')
+                    if dp:
+                        path_device_paths[dp] = i
+                except Exception:
                     pass
+
+        # Build path_idx -> monitor map. Prefer devicePath; fall back to monitor_N.
+        idx_to_mon = {}
+        claimed_idxs: set = set()
+        for m in monitors:
+            dp = m.get('devicePath') if isinstance(m, dict) else None
+            idx = None
+            if isinstance(dp, str) and dp and dp in path_device_paths:
+                candidate = path_device_paths[dp]
+                if candidate not in claimed_idxs:
+                    idx = candidate
+            if idx is None:
+                mid = m.get('id', '')
+                if isinstance(mid, str) and mid.startswith('monitor_'):
+                    try:
+                        candidate = int(mid.split('_', 1)[1])
+                        if 0 <= candidate < len(paths) and candidate not in claimed_idxs:
+                            idx = candidate
+                    except (ValueError, IndexError):
+                        pass
+            if idx is not None:
+                idx_to_mon[idx] = m
+                claimed_idxs.add(idx)
 
         if not idx_to_mon:
             return cfg
