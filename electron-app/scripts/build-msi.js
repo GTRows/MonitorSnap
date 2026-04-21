@@ -16,7 +16,7 @@ async function main() {
   const msiCreator = new MSICreator({
     appDirectory,
     outputDirectory: releaseDir,
-    exe: 'DisplayPresets',
+    exe: 'MonitorSnap',
     name: 'MonitorSnap',
     manufacturer: 'GTRows',
     version: pkg.version,
@@ -32,8 +32,8 @@ async function main() {
   await msiCreator.create();
   const { supportBinaries } = await msiCreator.compile();
 
-  const srcMsi = path.join(releaseDir, 'DisplayPresets.msi');
-  const dstMsi = path.join(releaseDir, `DisplayPresets-${pkg.version}.msi`);
+  const srcMsi = path.join(releaseDir, 'MonitorSnap.msi');
+  const dstMsi = path.join(releaseDir, `MonitorSnap-${pkg.version}.msi`);
   if (fs.existsSync(srcMsi)) {
     fs.renameSync(srcMsi, dstMsi);
     console.log(`MSI: ${dstMsi}`);

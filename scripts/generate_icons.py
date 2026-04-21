@@ -1,5 +1,5 @@
 """
-Generate app icons for DisplayPresets.
+Generate app icons for MonitorSnap.
 
 Usage:
     python scripts/generate_icons.py

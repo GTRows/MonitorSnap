@@ -9,11 +9,13 @@ let pythonProcess: ChildProcess | null = null;
 let backendPort: number | null = null;
 
 let readyToShowFired = false;
+let settingsLoaded = false;
 let initialShowResolved = false;
 let startHiddenAtLaunch = false;
 
 function maybeShowInitialWindow(): void {
-  if (initialShowResolved || !readyToShowFired || !mainWindow) return;
+  if (initialShowResolved) return;
+  if (!readyToShowFired || !settingsLoaded || !mainWindow) return;
   initialShowResolved = true;
   if (startHiddenAtLaunch) return;
   mainWindow.show();
@@ -167,9 +169,18 @@ function startPythonBackend(): Promise<number> {
     const { command, args, cwd } = resolveBackendCommand();
     let stderrBuffer = '';
 
+    const portableDir = process.env.PORTABLE_EXECUTABLE_DIR;
+    const backendEnv: NodeJS.ProcessEnv = {
+      ...process.env,
+      MONITORSNAP_APP_EXE: process.execPath,
+    };
+    if (portableDir) {
+      backendEnv.MONITORSNAP_DATA_DIR = path.join(portableDir, 'MonitorSnapData');
+    }
+
     const proc = spawn(command, args, {
       cwd,
-      env: { ...process.env, DISPLAYPRESETS_APP_EXE: process.execPath },
+      env: backendEnv,
       windowsHide: true,
     });
 
@@ -389,7 +400,7 @@ function resolveTrayIcon(): Electron.NativeImage {
 
 function createTray(): void {
   tray = new Tray(resolveTrayIcon());
-  tray.setToolTip('DisplayPresets');
+  tray.setToolTip('MonitorSnap');
   updateTrayMenu([]);
   tray.on('click', () => {
     if (mainWindow && mainWindow.isVisible() && mainWindow.isFocused()) {
@@ -421,7 +432,7 @@ function updateTrayMenu(presets: Array<{ id: string; name: string }>): void {
 
   const contextMenu = Menu.buildFromTemplate([
     {
-      label: 'Open DisplayPresets',
+      label: 'Open MonitorSnap',
       click: showAndFocusWindow,
     },
     { type: 'separator' },
@@ -684,6 +695,7 @@ app.whenReady().then(async () => {
     } catch {
       startHiddenAtLaunch = false;
     }
+    settingsLoaded = true;
     maybeShowInitialWindow();
     await registerAllHotkeys();
     await refreshTrayMenu();
@@ -694,6 +706,7 @@ app.whenReady().then(async () => {
       error: err instanceof Error ? err.message : String(err),
     });
     startHiddenAtLaunch = false;
+    settingsLoaded = true;
     maybeShowInitialWindow();
   }
 

@@ -41,13 +41,13 @@ Electron `main.ts` spawns `python -m display_presets.server` as a child process.
 
 - **server.py**: HTTP server bridging Electron to Python. Routes: `/presets`, `/displays`, `/settings`.
 - **display_config.py**: Windows Display Configuration API wrapper (ctypes). `DisplayConfigManager` handles `QueryDisplayConfig` / `SetDisplayConfig`. Two-phase apply: topology first, then positions.
-- **store.py**: UUID-based preset CRUD for the Electron UI. Presets in `%APPDATA%\DisplayPresets\presets\`.
+- **store.py**: UUID-based preset CRUD for the Electron UI. Presets in `%APPDATA%\MonitorSnap\presets\`.
 - **displays.py**: Normalizes raw display config into frontend-friendly monitor objects.
 - **preset_service.py**: Name-based preset CRUD for the CLI.
 - **settings.py**: User preferences (theme, autostart, minimize behavior, font scale).
 - **autostart.py**: Windows registry manipulation for startup.
-- **logger.py**: Centralized logging to `%APPDATA%\DisplayPresets\debug.log`.
-- **config.py**: App data paths (`%APPDATA%\DisplayPresets\`).
+- **logger.py**: Centralized logging to `%APPDATA%\MonitorSnap\debug.log`.
+- **config.py**: App data paths (`%APPDATA%\MonitorSnap\`).
 - **cli.py**: Command-line interface (list, apply, save, delete, rename, current, info).
 
 ### Frontend (electron-app/)
@@ -60,7 +60,7 @@ Electron `main.ts` spawns `python -m display_presets.server` as a child process.
 
 ### Data Storage
 
-All user data in `%APPDATA%\DisplayPresets\`:
+All user data in `%APPDATA%\MonitorSnap\`:
 - `presets/{uuid}.json` - Saved display configurations
 - `settings.json` - Application preferences
 - `debug.log` - Debug output
@@ -81,10 +81,10 @@ Windows-only due to ctypes bindings to `user32.dll` Display Configuration API. T
 
 Every release MUST produce all four of the following artifacts, uploaded to the GitHub release:
 
-1. **Installer** — `DisplayPresets-Setup-<version>.exe` (NSIS, per-user, creates Start Menu entry and uninstaller).
-2. **MSI** — `DisplayPresets-<version>.msi` (Windows Installer package, for enterprise / GPO deployment; built via `electron-wix-msi` + WiX Toolset).
-3. **Portable** — `DisplayPresets-Portable-<version>.exe` (single-file executable, no install).
-4. **Zip** — `DisplayPresets-<version>-win.zip` (pre-built app folder, extract-and-run).
+1. **Installer** — `MonitorSnap-Setup-<version>.exe` (NSIS, per-user, creates Start Menu entry and uninstaller).
+2. **MSI** — `MonitorSnap-<version>.msi` (Windows Installer package, for enterprise / GPO deployment; built via `electron-wix-msi` + WiX Toolset).
+3. **Portable** — `MonitorSnap-Portable-<version>.exe` (single-file executable, no install).
+4. **Zip** — `MonitorSnap-<version>-win.zip` (pre-built app folder, extract-and-run).
 
 NSIS, portable, and zip are configured in `electron-app/package.json` under `build.win.target`. The MSI is built by `electron-app/scripts/build-msi.js` as a post-build step in `.github/workflows/release.yml` (requires WiX Toolset on the runner — `windows-latest` ships 3.11). Do not remove any target.
 

@@ -91,5 +91,5 @@ jobs:
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
-          name: DisplayPresets-Windows
+          name: MonitorSnap-Windows
           path: electron-app/release/*.exe

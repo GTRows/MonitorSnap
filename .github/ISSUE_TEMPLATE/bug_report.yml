@@ -1,5 +1,5 @@
 name: Bug Report
-description: Report a bug in DisplayPresets
+description: Report a bug in MonitorSnap
 labels: ["bug"]
 body:
   - type: textarea
@@ -52,7 +52,7 @@ body:
     id: logs
     attributes:
       label: Logs
-      description: Paste any relevant logs from `%APPDATA%\DisplayPresets\debug.log`
+      description: Paste any relevant logs from `%APPDATA%\MonitorSnap\debug.log`
       render: text
 
   - type: textarea

@@ -20,7 +20,7 @@ export function Sidebar() {
       <div className="px-5 py-4 flex items-center gap-2.5">
         <img src="./icon.png" alt="" className="w-6 h-6 shrink-0" draggable={false} />
         <h1 className="text-subtitle font-semibold text-text-primary tracking-tight">
-          DisplayPresets
+          MonitorSnap
         </h1>
       </div>
 

@@ -1,7 +1,7 @@
 @echo off
 setlocal
 
-echo [DisplayPresets] Starting development environment...
+echo [MonitorSnap] Starting development environment...
 echo.
 
 :: Check Python

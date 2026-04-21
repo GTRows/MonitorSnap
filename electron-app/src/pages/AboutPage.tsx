@@ -157,7 +157,7 @@ export function AboutPage() {
             <Monitor size={28} className="text-accent" />
           </div>
           <div>
-            <h2 className="text-title font-semibold text-text-primary">DisplayPresets</h2>
+            <h2 className="text-title font-semibold text-text-primary">MonitorSnap</h2>
             <p className="text-caption text-text-tertiary">Version {APP_VERSION}</p>
           </div>
         </div>
@@ -211,9 +211,9 @@ export function AboutPage() {
           </div>
           <div className="grid grid-cols-[auto_1fr] gap-x-3 gap-y-1.5 text-caption">
             <span className="text-text-tertiary">Presets</span>
-            <code className="text-text-secondary font-mono">%APPDATA%\DisplayPresets\presets\</code>
+            <code className="text-text-secondary font-mono">%APPDATA%\MonitorSnap\presets\</code>
             <span className="text-text-tertiary">Settings</span>
-            <code className="text-text-secondary font-mono">%APPDATA%\DisplayPresets\settings.json</code>
+            <code className="text-text-secondary font-mono">%APPDATA%\MonitorSnap\settings.json</code>
           </div>
         </div>
 

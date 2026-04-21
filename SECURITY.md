@@ -9,7 +9,7 @@
 
 ## Reporting a Vulnerability
 
-If you discover a security vulnerability in DisplayPresets, please report it
+If you discover a security vulnerability in MonitorSnap, please report it
 responsibly.
 
 **Do not open a public issue.** Instead, use one of the following:
@@ -43,4 +43,4 @@ This policy covers:
 
 - The Python HTTP server binds to `127.0.0.1` only and is not exposed to the network.
 - The app uses Windows Display Configuration API via ctypes with no elevated privileges by default.
-- All user data is stored locally in `%APPDATA%\DisplayPresets\`.
+- All user data is stored locally in `%APPDATA%\MonitorSnap\`.

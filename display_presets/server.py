@@ -281,10 +281,10 @@ class _Handler(BaseHTTPRequestHandler):
                     else:
                         autostart.disable()
                     _settings.start_with_windows = desired
-                except OSError as e:
+                except (OSError, RuntimeError) as e:
                     _log.exception('autostart toggle failed')
                     _settings.start_with_windows = prev
-                    self._err(f'Autostart update failed: {e}', 500)
+                    self._err(f'Autostart update failed: {e}', 400)
                     return
             if 'startMinimized' in body:
                 _settings.start_minimized = body['startMinimized']
