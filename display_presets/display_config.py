@@ -1,6 +1,7 @@
 import ctypes
 import json
 from ctypes import wintypes, Structure, POINTER, c_uint32, c_int32, c_uint64, c_bool
+from typing import Any
 
 from display_presets.logger import get_logger
 
@@ -128,6 +129,70 @@ SetDisplayConfig.argtypes = [c_uint32, POINTER(DISPLAYCONFIG_PATH_INFO),
 SetDisplayConfig.restype = wintypes.LONG
 
 
+def _normalize_device_path(device_path: Any) -> str | None:
+    if not isinstance(device_path, str) or not device_path:
+        return None
+    return device_path.strip().casefold()
+
+
+def _edid_key(info: dict[str, Any] | None) -> tuple[int, int] | None:
+    if not isinstance(info, dict):
+        return None
+    manufacture_id = int(info.get('edidManufactureId') or 0)
+    product_code_id = int(info.get('edidProductCodeId') or 0)
+    if not manufacture_id or not product_code_id:
+        return None
+    return manufacture_id, product_code_id
+
+
+def _monitor_for_saved_path(
+    monitors: list[dict[str, Any]] | None,
+    path_index: int,
+) -> dict[str, Any]:
+    if not monitors:
+        return {}
+    expected_id = f'monitor_{path_index}'
+    for monitor in monitors:
+        if isinstance(monitor, dict) and monitor.get('id') == expected_id:
+            return monitor
+    if path_index < len(monitors) and isinstance(monitors[path_index], dict):
+        return monitors[path_index]
+    return {}
+
+
+def _resolve_current_target(
+    identity: dict[str, Any],
+    cur_by_device_path: dict[str, dict[str, Any]],
+    cur_by_edid: dict[tuple[int, int], list[dict[str, Any]]],
+) -> dict[str, Any] | None:
+    device_path = _normalize_device_path(identity.get('devicePath'))
+    if device_path and device_path in cur_by_device_path:
+        return cur_by_device_path[device_path]
+
+    edid_key = _edid_key(identity)
+    if not edid_key:
+        return None
+
+    matches = cur_by_edid.get(edid_key, [])
+    if len(matches) == 1:
+        return matches[0]
+
+    monitor_name = identity.get('name')
+    if isinstance(monitor_name, str) and monitor_name:
+        named_matches = [m for m in matches if m.get('name') == monitor_name]
+        if len(named_matches) == 1:
+            return named_matches[0]
+
+    return None
+
+
+def _path_monitor_identity(path: dict[str, Any]) -> dict[str, Any]:
+    identity = path.get('monitorIdentity')
+    if isinstance(identity, dict):
+        return identity
+    return {}
+
+
 class DisplayConfigManager:
     def get_current(self):
         pc, mc = c_uint32(), c_uint32()
@@ -148,7 +213,7 @@ class DisplayConfigManager:
             'modes': [self._dump_mode(modes[i]) for i in range(mc.value)]
         }
 
-    def apply(self, cfg):
+    def apply(self, cfg, monitors: list[dict[str, Any]] | None = None):
         """Apply a saved display configuration using a two-phase approach.
 
         Phase 1 — Set the source-to-target topology via SDC_TOPOLOGY_SUPPLIED
@@ -158,19 +223,6 @@ class DisplayConfigManager:
         positions to match the saved preset, and apply back.
         """
         _INVALID = 0xFFFFFFFF
-
-        # --- Extract desired source positions from saved config ---
-        desired = {}  # target_id -> {x, y}
-        for p in cfg['paths']:
-            tid = p['targetInfo']['id']
-            si = p['sourceInfo']['modeInfoIdx']
-            if si != _INVALID and si < len(cfg['modes']):
-                m = cfg['modes'][si]
-                if m.get('infoType') == 1 and 'sourceMode' in m:
-                    sm = m['sourceMode']
-                    desired[tid] = {'x': sm['position']['x'], 'y': sm['position']['y']}
-
-        _log.debug('apply: desired positions for %d targets: %s', len(desired), desired)
 
         # --- Get current adapter LUID (query ALL paths, not just active,
         # so transiently-inactive targets like KVM-switched monitors are visible) ---
@@ -188,38 +240,119 @@ class DisplayConfigManager:
             return r
 
         cur_info = {}
+        cur_by_device_path = {}
+        cur_by_edid = {}
+
+        try:
+            from display_presets.displays import _get_monitor_device_info
+        except ImportError:
+            _get_monitor_device_info = None
+
         for i in range(pc0.value):
             tid = cur_p[i].targetInfo.id
-            if tid in cur_info:
-                continue
-            cur_info[tid] = {
+            adapter_id = {
+                'LowPart': int(cur_p[i].targetInfo.adapterId.LowPart),
+                'HighPart': int(cur_p[i].targetInfo.adapterId.HighPart),
+            }
+            device_info = {}
+            if _get_monitor_device_info is not None:
+                try:
+                    device_info = _get_monitor_device_info(adapter_id, int(tid))
+                except Exception:
+                    device_info = {}
+
+            source_available = cur_p[i].sourceInfo.modeInfoIdx != _INVALID
+            score = (
+                8 if cur_p[i].flags & 1 else 0,
+                4 if cur_p[i].targetInfo.targetAvailable else 0,
+                2 if cur_p[i].targetInfo.statusFlags else 0,
+                1 if source_available else 0,
+            )
+            row = {
+                'target_id': int(tid),
                 'luid_lo': cur_p[i].sourceInfo.adapterId.LowPart,
                 'luid_hi': cur_p[i].sourceInfo.adapterId.HighPart,
                 'out_tech': cur_p[i].targetInfo.outputTechnology,
+                'score': score,
+                'device_path': _normalize_device_path(device_info.get('devicePath')),
+                'edid_key': _edid_key(device_info),
+                'name': device_info.get('name'),
             }
+            if tid not in cur_info or score > cur_info[tid]['score']:
+                cur_info[tid] = row
+
+            device_path = row['device_path']
+            if device_path and (
+                device_path not in cur_by_device_path
+                or score > cur_by_device_path[device_path]['score']
+            ):
+                cur_by_device_path[device_path] = row
+
+            edid_key = row['edid_key']
+            if edid_key:
+                cur_by_edid.setdefault(edid_key, []).append(row)
 
         default_ci = next(iter(cur_info.values())) if cur_info else {
             'luid_lo': 0, 'luid_hi': 0, 'out_tech': 0,
         }
 
+        saved = cfg['paths']
+        target_id_map = {}
+        for i, sp in enumerate(saved):
+            saved_tid = sp['targetInfo']['id']
+            if saved_tid in cur_info:
+                target_id_map[saved_tid] = saved_tid
+                continue
+
+            monitor = _monitor_for_saved_path(monitors, i)
+            identity = _path_monitor_identity(sp) or monitor
+            resolved = _resolve_current_target(identity, cur_by_device_path, cur_by_edid)
+            if resolved is None:
+                continue
+
+            target_id_map[saved_tid] = resolved['target_id']
+            _log.warning(
+                'Remapping saved target id %d to current target id %d for %s',
+                saved_tid,
+                resolved['target_id'],
+                identity.get('name') or resolved.get('name') or 'display',
+            )
+
+        # --- Extract desired source positions from saved config ---
+        desired = {}  # current target_id -> {x, y}
+        for p in cfg['paths']:
+            saved_tid = p['targetInfo']['id']
+            tid = target_id_map.get(saved_tid, saved_tid)
+            si = p['sourceInfo']['modeInfoIdx']
+            if si != _INVALID and si < len(cfg['modes']):
+                m = cfg['modes'][si]
+                if m.get('infoType') == 1 and 'sourceMode' in m:
+                    sm = m['sourceMode']
+                    desired[tid] = {'x': sm['position']['x'], 'y': sm['position']['y']}
+
+        _log.debug('apply: desired positions for %d targets: %s', len(desired), desired)
+
         # --- Pre-flight: every saved target id must be reachable on this adapter ---
-        missing = [p['targetInfo']['id'] for p in cfg['paths']
-                   if p['targetInfo']['id'] not in cur_info]
+        missing = [
+            p['targetInfo']['id'] for p in cfg['paths']
+            if target_id_map.get(p['targetInfo']['id'], p['targetInfo']['id']) not in cur_info
+        ]
         if missing:
             _log.error('Saved targets not present on current adapter: %s', missing)
+            missing_ids = ', '.join(str(t) for t in missing)
+            target_label = 'target ids' if len(missing) > 1 else 'target id'
             raise Exception(
                 'Preset references display(s) not currently connected '
-                f'(target id{"s" if len(missing) > 1 else ""}: {", ".join(str(t) for t in missing)}). '
+                f'({target_label}: {missing_ids}). '
                 'Reconnect the display or save a new preset with the current setup.'
             )
 
         # --- Phase 1: Set topology ---
-        saved = cfg['paths']
         n = len(saved)
         tp = (DISPLAYCONFIG_PATH_INFO * n)()
 
         for i, sp in enumerate(saved):
-            tid = sp['targetInfo']['id']
+            tid = target_id_map.get(sp['targetInfo']['id'], sp['targetInfo']['id'])
             ci = cur_info.get(tid, default_ci)
 
             tp[i].sourceInfo.adapterId.LowPart = ci['luid_lo']
@@ -306,7 +439,7 @@ class DisplayConfigManager:
         return 0
 
     def _dump_path(self, p):
-        return {
+        path = {
             'sourceInfo': {
                 'adapterId': {'LowPart': int(p.sourceInfo.adapterId.LowPart),
                              'HighPart': int(p.sourceInfo.adapterId.HighPart)},
@@ -329,6 +462,37 @@ class DisplayConfigManager:
                 'statusFlags': int(p.targetInfo.statusFlags)
             },
             'flags': int(p.flags)
+        }
+        identity = self._get_path_monitor_identity(path['targetInfo'])
+        if identity:
+            path['monitorIdentity'] = identity
+        return path
+
+    def _get_path_monitor_identity(self, target_info: dict[str, Any]) -> dict[str, Any]:
+        try:
+            from display_presets.displays import _get_monitor_device_info
+        except ImportError:
+            return {}
+
+        adapter_id = target_info.get('adapterId')
+        target_id = target_info.get('id')
+        if not isinstance(adapter_id, dict) or not isinstance(target_id, int):
+            return {}
+
+        try:
+            info = _get_monitor_device_info(adapter_id, target_id)
+        except Exception:
+            return {}
+
+        identity = {
+            'name': info.get('name'),
+            'devicePath': info.get('devicePath'),
+            'edidManufactureId': info.get('edidManufactureId', 0),
+            'edidProductCodeId': info.get('edidProductCodeId', 0),
+        }
+        return {
+            key: value for key, value in identity.items()
+            if value not in (None, '', 0)
         }
 
     def _dump_mode(self, m):

@@ -165,7 +165,7 @@ class _Handler(BaseHTTPRequestHandler):
                 return self._err('preset has no captured display configuration')
             try:
                 _log.info('Applying preset id=%s name=%r', parts[1], preset.get('name'))
-                result = DisplayConfigManager().apply(config)
+                result = DisplayConfigManager().apply(config, preset.get('monitors'))
                 if result == 0:
                     self._ok()
                 else:
@@ -190,7 +190,7 @@ class _Handler(BaseHTTPRequestHandler):
             try:
                 mgr = DisplayConfigManager()
                 rebuilt = mgr.rebuild_config_for_monitors(config, monitors)
-                result = mgr.apply(rebuilt)
+                result = mgr.apply(rebuilt, monitors)
                 if result == 0:
                     self._json(get_current_displays())
                 else:
@@ -254,7 +254,7 @@ class _Handler(BaseHTTPRequestHandler):
                 mgr = DisplayConfigManager()
                 config = mgr.get_current()
                 rebuilt = mgr.rebuild_config_for_monitors(config, monitors)
-                result = mgr.apply(rebuilt)
+                result = mgr.apply(rebuilt, monitors)
                 if result == 0:
                     self._json(get_current_displays())
                 else:

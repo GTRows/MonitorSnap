@@ -1,6 +1,7 @@
 import pytest
 
 from display_presets import displays as displays_mod
+from display_presets import display_config as display_config_mod
 from display_presets.display_config import DisplayConfigManager
 
 
@@ -174,3 +175,79 @@ def test_rebuild_unknown_device_path_falls_back_to_monitor_n(device_info_map):
 
     pos1 = out['modes'][out['paths'][1]['sourceInfo']['modeInfoIdx']]['sourceMode']['position']
     assert (pos1['x'], pos1['y']) == (999, 0)
+
+
+def test_apply_remaps_saved_target_id_by_monitor_identity(monkeypatch, device_info_map):
+    cfg = {
+        'paths': [
+            {
+                **_make_path(src_id=0, tgt_id=111, mode_idx=0),
+                'monitorIdentity': {
+                    'name': 'Stable Display',
+                    'devicePath': r'\\?\DISPLAY#STABLE',
+                    'edidManufactureId': 123,
+                    'edidProductCodeId': 456,
+                },
+            },
+        ],
+        'modes': [
+            _make_source_mode(0, 100, 0, 1920, 1080),
+        ],
+    }
+
+    current_target_id = 333
+    device_info_map[(1, 0, current_target_id)] = {
+        'name': 'Stable Display',
+        'devicePath': r'\\?\DISPLAY#STABLE',
+        'edidManufactureId': 123,
+        'edidProductCodeId': 456,
+    }
+    calls = []
+
+    def fake_get_buffer_sizes(_flags, path_count, mode_count):
+        path_count._obj.value = 1
+        mode_count._obj.value = 1
+        return 0
+
+    def fake_query_config(_flags, path_count, paths, mode_count, modes, _topology):
+        path_count._obj.value = 1
+        mode_count._obj.value = 1
+        paths[0].sourceInfo.adapterId.LowPart = 1
+        paths[0].sourceInfo.adapterId.HighPart = 0
+        paths[0].sourceInfo.id = 0
+        paths[0].sourceInfo.modeInfoIdx = 0
+        paths[0].sourceInfo.statusFlags = 1
+        paths[0].targetInfo.adapterId.LowPart = 1
+        paths[0].targetInfo.adapterId.HighPart = 0
+        paths[0].targetInfo.id = current_target_id
+        paths[0].targetInfo.modeInfoIdx = 0
+        paths[0].targetInfo.outputTechnology = 10
+        paths[0].targetInfo.targetAvailable = True
+        paths[0].targetInfo.statusFlags = 1
+        paths[0].flags = 1
+        modes[0].infoType = 1
+        modes[0].id = 0
+        modes[0].adapterId.LowPart = 1
+        modes[0].adapterId.HighPart = 0
+        modes[0].modeInfo.sourceMode.width = 1920
+        modes[0].modeInfo.sourceMode.height = 1080
+        modes[0].modeInfo.sourceMode.position.x = 0
+        modes[0].modeInfo.sourceMode.position.y = 0
+        return 0
+
+    def fake_set_display_config(path_count, paths, _mode_count, _modes, flags):
+        calls.append({
+            'target_ids': [int(paths[i].targetInfo.id) for i in range(path_count)],
+            'flags': int(flags),
+        })
+        return 0
+
+    monkeypatch.setattr(display_config_mod, 'GetDisplayConfigBufferSizes', fake_get_buffer_sizes)
+    monkeypatch.setattr(display_config_mod, 'QueryDisplayConfig', fake_query_config)
+    monkeypatch.setattr(display_config_mod, 'SetDisplayConfig', fake_set_display_config)
+
+    result = DisplayConfigManager().apply(cfg)
+
+    assert result == 0
+    assert calls
+    assert all(call['target_ids'] == [current_target_id] for call in calls)
