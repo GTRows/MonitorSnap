@@ -4,7 +4,7 @@
 
 - Windows 10/11
 - Python 3.10+
-- Node.js 20+
+- Node.js 24+
 
 ## Setup
 
