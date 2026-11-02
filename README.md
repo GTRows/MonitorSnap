@@ -69,7 +69,7 @@ Select a preset, click its **Hotkey** field, and press a combination such as `Ct
 
 ### 5. Keep it within reach
 
-In **Settings**, enable **Start with Windows** and **Start minimized** if you want MonitorSnap available in the tray after signing in. **Minimize after apply** hides the window after switching layouts. Closing the window keeps the app in the tray; use **Quit** in the tray menu to exit.
+In **Settings**, enable **Start with Windows** and **Start minimized** if you want MonitorSnap available in the tray after signing in. **Minimize after apply** hides the window after switching layouts. Closing the window keeps the app in the tray; use **Exit** in the tray menu to quit.
 
 ## See your displays at a glance
 
