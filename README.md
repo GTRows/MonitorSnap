@@ -15,7 +15,7 @@ Made for KVM switches, docking stations, and multi-monitor desks.
 
 [Download for Windows](https://github.com/GTRows/MonitorSnap/releases/latest) · [Getting started](#getting-started) · [Report a bug](https://github.com/GTRows/MonitorSnap/issues) · [Contribute](CONTRIBUTING.md)
 
-<img src="docs/screenshots/presets.png" alt="MonitorSnap showing a saved three-monitor desk setup, its display layout, monitor details, and a global hotkey" width="1080" />
+<img src="docs/screenshots/presets.png" alt="MonitorSnap showing three example presets and a saved four-display desk setup with a QHD primary monitor and a global hotkey" width="1080" />
 
 Free and open source. MIT licensed. No account required.
 
@@ -75,15 +75,13 @@ In **Settings**, enable **Start with Windows** and **Start minimized** if you wa
 
 The **Displays** page shows the current layout, primary screen, resolutions, refresh rates, scale, and positions. Mirrored displays appear together in the canvas.
 
-<img src="docs/screenshots/displays.png" alt="Current Displays page with a primary monitor and two mirrored displays, plus a table of detected display properties" width="1080" />
+<img src="docs/screenshots/displays.png" alt="Current Displays page showing four connected displays, including a QHD primary monitor, a side monitor, and two mirrored displays" width="1080" />
 
-The screenshots show a real three-monitor configuration: one primary display and two mirrored displays.
+The screenshots show four connected displays: a QHD primary monitor, a side monitor, and two mirrored displays. The preset list includes example layouts for work, an extended workspace, and presentations.
 
 ## Make it fit your workflow
 
 Choose a light, dark, or system theme; control startup and minimize behavior; adjust text size; and export or import presets from **Settings**.
-
-<img src="docs/screenshots/settings.png" alt="Settings page showing theme, startup, minimize behavior, and notification preferences" width="1080" />
 
 **Layout editing is experimental.** To try the drag editor, enable **Settings > Beta Features > Edit preset layouts**. It adds editing controls to presets and the Displays page. For everyday use, configure displays in Windows and capture the result as a preset.
 
