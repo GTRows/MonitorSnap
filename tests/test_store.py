@@ -1,6 +1,8 @@
 import json
 import uuid
 
+import pytest
+
 from display_presets.store import PresetStore
 
 
@@ -175,3 +177,50 @@ def test_import_many_skips_invalid_entries(app_dir):
         {"name": "OK", "monitors": []},
     ])
     assert (imported, skipped) == (1, 4)
+
+
+@pytest.mark.parametrize("preset_id", [
+    "../outside", r"..\outside", "outside", "C:outside", r"C:\outside",
+    r"\\server\share\outside", "/outside", "%2e%2e%5coutside", "..%2foutside",
+    str(uuid.uuid4()) + ":stream", "", None,
+])
+def test_preset_operations_reject_paths_outside_store(app_dir, preset_id):
+    store = PresetStore()
+    outside = app_dir / "outside.json"
+    original = '{"name": "Outside", "monitors": []}'
+    outside.write_text(original, encoding="utf-8")
+
+    assert store.get(preset_id) is None
+    assert store.update(preset_id, {"name": "Changed"}) is None
+    assert store.duplicate(preset_id) is None
+    assert store.delete(preset_id) is False
+    with pytest.raises(ValueError):
+        store._write(preset_id, {"name": "Changed"})
+    assert outside.read_text(encoding="utf-8") == original
+
+
+@pytest.mark.parametrize("form", ["canonical", "hex", "braces", "uppercase", "hyphens"])
+def test_imported_uuid_filename_forms_remain_accessible(app_dir, form):
+    store = PresetStore()
+    identifier = uuid.uuid4()
+    preset_id = {
+        "canonical": str(identifier),
+        "hex": identifier.hex,
+        "braces": "{" + str(identifier) + "}",
+        "uppercase": str(identifier).upper(),
+        "hyphens": "-" + identifier.hex,
+    }[form]
+    assert store.import_many([{"id": preset_id, "name": "Imported", "monitors": []}]) == (1, 0)
+    assert store.get(preset_id)["id"] == preset_id
+    assert store.update(preset_id, {"name": "Updated"})["name"] == "Updated"
+    assert store.delete(preset_id) is True
+
+
+def test_import_urn_uuid_gets_a_safe_filename(app_dir):
+    store = PresetStore()
+    assert store.import_many([
+        {"id": uuid.uuid4().urn, "name": "Imported", "monitors": []}
+    ]) == (1, 0)
+    preset = store.list_all()[0]
+    assert preset["id"] == str(uuid.UUID(preset["id"]))
+    assert store.get(preset["id"]) == preset

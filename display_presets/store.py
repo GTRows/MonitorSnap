@@ -1,7 +1,9 @@
 import json
 import os
+import re
 import uuid
 import datetime
+from pathlib import Path
 from display_presets.config import get_presets_dir
 
 
@@ -10,6 +12,15 @@ class PresetStore:
 
     def __init__(self):
         self.dir = get_presets_dir()
+
+    def _preset_path(self, preset_id: str) -> Path | None:
+        if not isinstance(preset_id, str) or not re.fullmatch(r'[0-9A-Fa-f{}-]+', preset_id):
+            return None
+        try:
+            uuid.UUID(preset_id)
+        except ValueError:
+            return None
+        return self.dir / f"{preset_id}.json"
 
     def list_all(self):
         presets = []
@@ -29,8 +40,8 @@ class PresetStore:
         return sorted(presets, key=lambda p: p.get('created_at', ''))
 
     def get(self, preset_id):
-        path = self.dir / f"{preset_id}.json"
-        if not path.exists():
+        path = self._preset_path(preset_id)
+        if path is None or not path.exists():
             return None
         try:
             with open(path, encoding='utf-8') as f:
@@ -66,8 +77,8 @@ class PresetStore:
         return preset
 
     def delete(self, preset_id):
-        path = self.dir / f"{preset_id}.json"
-        if path.exists():
+        path = self._preset_path(preset_id)
+        if path is not None and path.exists():
             path.unlink()
             return True
         return False
@@ -118,11 +129,8 @@ class PresetStore:
                 continue
             hotkey = p.get('hotkey') if isinstance(p.get('hotkey'), str) else None
             preset_id = p.get('id') if isinstance(p.get('id'), str) else None
-            if preset_id:
-                try:
-                    uuid.UUID(preset_id)
-                except ValueError:
-                    preset_id = None
+            if preset_id and self._preset_path(preset_id) is None:
+                preset_id = None
             if not preset_id:
                 preset_id = str(uuid.uuid4())
             record = {
@@ -139,10 +147,12 @@ class PresetStore:
         return imported, skipped
 
     def _write(self, preset_id, data):
+        path = self._preset_path(preset_id)
+        if path is None:
+            raise ValueError('Invalid preset ID')
         # Ensure the presets directory exists (user may have deleted it at
         # runtime) and write atomically via a temp file + rename.
         self.dir.mkdir(parents=True, exist_ok=True)
-        path = self.dir / f"{preset_id}.json"
         tmp = path.with_suffix(path.suffix + '.tmp')
         with open(tmp, 'w', encoding='utf-8') as f:
             json.dump(data, f, indent=2)
