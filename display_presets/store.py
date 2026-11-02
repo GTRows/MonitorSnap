@@ -20,7 +20,11 @@ class PresetStore:
             uuid.UUID(preset_id)
         except ValueError:
             return None
-        return self.dir / f"{os.path.basename(preset_id)}.json"
+        root = os.path.realpath(self.dir)
+        path = os.path.realpath(os.path.join(root, f"{preset_id}.json"))
+        if not path.startswith(root + os.sep):
+            return None
+        return Path(path)
 
     def list_all(self):
         presets = []
