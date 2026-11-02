@@ -1,6 +1,6 @@
 {
   "name": "monitorsnap",
-  "version": "2.6.1",
+  "version": "2.6.2",
   "description": "Save and restore monitor configurations instantly",
   "main": "dist-electron/main.js",
   "scripts": {
@@ -24,15 +24,15 @@
     "@vitejs/plugin-react": "^4.3.0",
     "autoprefixer": "^10.4.20",
     "concurrently": "^9.1.0",
-    "electron": "^33.3.0",
-    "electron-builder": "^25.1.0",
+    "electron": "^45.2.1",
+    "electron-builder": "^26.18.0",
     "jsdom": "^29.0.2",
-    "postcss": "^8.4.49",
+    "postcss": "^8.5.32",
     "tailwindcss": "^3.4.17",
     "typescript": "^5.7.0",
-    "vite": "^6.0.0",
-    "vitest": "^4.1.4",
-    "wait-on": "^8.0.0"
+    "vite": "^6.4.5",
+    "vitest": "^4.1.12",
+    "wait-on": "^9.5.1"
   },
   "build": {
     "appId": "com.monitorsnap.app",
@@ -80,5 +80,8 @@
         "to": "backend/monitorsnap-backend.exe"
       }
     ]
+  },
+  "overrides": {
+    "minimatch@>=9": "^11.0.4"
   }
 }

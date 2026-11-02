@@ -107,7 +107,7 @@ MonitorSnap is Windows-only. Custom GPU modes and unusual display configurations
 
 ## Build from source
 
-You need Windows, Python 3.10+, Node.js 20+, and Git for development.
+You need Windows, Python 3.10+, Node.js 24+, and Git for development.
 
 ```powershell
 git clone https://github.com/GTRows/MonitorSnap.git
