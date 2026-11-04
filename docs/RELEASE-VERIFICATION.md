@@ -31,4 +31,6 @@ An unknown-publisher or low-reputation warning alone does not identify a particu
 
 If a security product reports a named threat, preserve the file hash and detection details so the exact package can be investigated and, when appropriate, submitted to that vendor for review.
 Microsoft provides an official [software developer submission portal](https://www.microsoft.com/en-us/wdsi/filesubmission).
+The v2.6.2 MSI was submitted there on 2026-11-04 with the exact Edge "isn't commonly downloaded" warning and its SHA-256. The request was received; an analyst decision is pending.
+This is a review request, not an approval or a guaranteed removal of the reputation warning. [Microsoft's developer guidance](https://learn.microsoft.com/en-us/windows/apps/package-and-deploy/smartscreen-reputation) explains that consumer SmartScreen reputation builds over time and signing does not guarantee an immediate warning-free download.
 No Microsoft analyst approval or completed code-signing application is claimed by this record.

@@ -58,6 +58,7 @@ Use your downloaded file's name and compare the full hash with its entry in `SHA
 A matching hash verifies that your file matches the published package; it is not a malware-free certification.
 
 A SmartScreen reputation or unknown-publisher warning is different from an antivirus detection with a threat name.
+For example, Edge's "isn't commonly downloaded" message means the download has not established sufficient reputation; the message alone is not a named malware detection.
 Code signing is not yet available for these releases. Do not disable antivirus protection or add exclusions to install MonitorSnap.
 If an antivirus flags a download, please [report it](https://github.com/GTRows/MonitorSnap/issues/new) with the version, package name, SHA-256, antivirus product, and exact detection name. Remove personal information from screenshots or logs.
 
