@@ -45,6 +45,24 @@ Windows 10 or 11, x64. The downloads include the backend; you do not need Python
 
 The release binaries are not code signed. Windows SmartScreen may show an unknown-publisher warning. Check that your download came from this repository's Releases page before deciding whether to run it.
 
+### Download verification and antivirus warnings
+
+Release packages are built by the public [GitHub Actions release workflow](https://github.com/GTRows/MonitorSnap/actions/workflows/release.yml).
+Download `SHA256SUMS.txt` from the same release as your package, then calculate its SHA-256 in PowerShell:
+
+```powershell
+Get-FileHash -LiteralPath .\MonitorSnap-Setup-2.6.2.exe -Algorithm SHA256
+```
+
+Use your downloaded file's name and compare the full hash with its entry in `SHA256SUMS.txt`.
+A matching hash verifies that your file matches the published package; it is not a malware-free certification.
+
+A SmartScreen reputation or unknown-publisher warning is different from an antivirus detection with a threat name.
+Code signing is not yet available for these releases. Do not disable antivirus protection or add exclusions to install MonitorSnap.
+If an antivirus flags a download, please [report it](https://github.com/GTRows/MonitorSnap/issues/new) with the version, package name, SHA-256, antivirus product, and exact detection name. Remove personal information from screenshots or logs.
+
+The [v2.6.2 verification record](docs/RELEASE-VERIFICATION.md) lists the checked package hashes and the dated local Microsoft Defender scan result, including its limitations.
+
 ## Getting started
 
 ### 1. Save a layout you already use

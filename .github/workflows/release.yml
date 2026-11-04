@@ -105,6 +105,22 @@ jobs:
           $env:PATH = "$wixBin;$env:PATH"
           node scripts/build-msi.js
 
+      - name: Generate download checksums
+        shell: pwsh
+        run: |
+          $artifacts = @(Get-ChildItem electron-app/release -File |
+            Where-Object { $_.Extension -in '.exe', '.msi', '.zip' } |
+            Sort-Object Name)
+          if ($artifacts.Count -ne 4) {
+            throw "Expected four release packages, found $($artifacts.Count)"
+          }
+          $checksums = @($artifacts | ForEach-Object {
+            $hash = (Get-FileHash -LiteralPath $_.FullName -Algorithm SHA256).Hash.ToLowerInvariant()
+            "$hash  $($_.Name)"
+          })
+          $checksumPath = Join-Path (Resolve-Path electron-app/release) 'SHA256SUMS.txt'
+          [System.IO.File]::WriteAllLines($checksumPath, $checksums)
+
       - name: Generate release notes
         shell: bash
         run: |
@@ -119,6 +135,7 @@ jobs:
             echo "- **MSI** (\`MonitorSnap-*.msi\`): Windows Installer package for enterprise / group policy deployment."
             echo "- **Portable** (\`MonitorSnap-Portable-*.exe\`): single-file executable, no install required. Runs from USB sticks or any folder."
             echo "- **Zip** (\`MonitorSnap-*-win.zip\`): pre-built app folder. Extract anywhere and run \`MonitorSnap.exe\`. No installer, no registry writes."
+            echo "- **SHA256SUMS.txt**: SHA-256 checksums for all four packages. See the README for verification instructions."
             echo ""
             echo "### Requirements"
             echo ""
@@ -145,6 +162,7 @@ jobs:
             electron-app/release/*.exe
             electron-app/release/*.zip
             electron-app/release/*.msi
+            electron-app/release/SHA256SUMS.txt
           body_path: release_notes.md
           draft: false
           prerelease: false
