@@ -62,7 +62,7 @@ For example, Edge's "isn't commonly downloaded" message means the download has n
 Code signing is not yet available for these releases. Do not disable antivirus protection or add exclusions to install MonitorSnap.
 If an antivirus flags a download, please [report it](https://github.com/GTRows/MonitorSnap/issues/new) with the version, package name, SHA-256, antivirus product, and exact detection name. Remove personal information from screenshots or logs.
 
-The [v2.6.2 verification record](docs/RELEASE-VERIFICATION.md) lists the checked package hashes and the dated local Microsoft Defender scan result, including its limitations.
+The [v2.6.2 verification record](docs/RELEASE-VERIFICATION.md#package-review-status) tracks Installer EXE, MSI, Portable EXE, and ZIP separately, with package hashes, dated local Microsoft Defender results, and Microsoft/VirusTotal review status. It distinguishes completed scans from pending or blocked submissions.
 
 ## Getting started
 

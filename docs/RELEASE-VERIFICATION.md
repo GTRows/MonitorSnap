@@ -12,6 +12,19 @@ Each locally calculated SHA-256 matched the corresponding asset's `digest` in th
 | `MonitorSnap-Portable-2.6.2.exe` | `e94204a229d9229db4f96fc2d03e788c6a0fbe51a060caacbfae057e7772287b` |
 | `MonitorSnap-2.6.2-win.zip` | `97314a7915b7b8b4c3d45653ca52d5bff4b04c21ccebe0d89362c190b68758ef` |
 
+### Package review status
+
+Last checked: 2026-11-04. Each package is tracked separately; a result for one package does not approve the others.
+
+| Package | Local Defender scan | Microsoft review | VirusTotal |
+| --- | --- | --- | --- |
+| Installer EXE | No threats found | Submitted; analyst decision pending | Upload blocked by reCAPTCHA connection error; no report |
+| MSI | No threats found | Submitted; analyst decision pending | Upload blocked by reCAPTCHA connection error; no report |
+| Portable EXE | No threats found | Submitted; analyst decision pending | Upload blocked by reCAPTCHA connection error; no report |
+| ZIP, including extracted contents for the local scan | No threats found | Prepared; human verification not yet completed | Upload blocked by reCAPTCHA connection error; no report |
+
+All four local scans used the engine and definitions listed below. None of these packages currently has a Microsoft analyst approval or a completed VirusTotal report in this record.
+
 ### Local antivirus scan
 
 Microsoft Defender Antivirus scanned the four downloaded packages and the extracted ZIP contents on 2026-11-04.
@@ -31,6 +44,6 @@ An unknown-publisher or low-reputation warning alone does not identify a particu
 
 If a security product reports a named threat, preserve the file hash and detection details so the exact package can be investigated and, when appropriate, submitted to that vendor for review.
 Microsoft provides an official [software developer submission portal](https://www.microsoft.com/en-us/wdsi/filesubmission).
-The v2.6.2 MSI was submitted there on 2026-11-04 with the exact Edge "isn't commonly downloaded" warning and its SHA-256. The request was received; an analyst decision is pending.
+The v2.6.2 MSI was submitted there on 2026-11-04 with the exact Edge "isn't commonly downloaded" warning and its SHA-256. The Installer EXE and Portable EXE were also received as separate review requests. The ZIP's current status is listed above. Analyst decisions are pending; no named malware detection has been reported for the additional packages.
 This is a review request, not an approval or a guaranteed removal of the reputation warning. [Microsoft's developer guidance](https://learn.microsoft.com/en-us/windows/apps/package-and-deploy/smartscreen-reputation) explains that consumer SmartScreen reputation builds over time and signing does not guarantee an immediate warning-free download.
 No Microsoft analyst approval or completed code-signing application is claimed by this record.
