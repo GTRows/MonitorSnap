@@ -1,6 +1,7 @@
 import ctypes
 import json
 from ctypes import wintypes, Structure, POINTER, c_uint32, c_int32, c_uint64, c_bool
+from fractions import Fraction
 from typing import Any
 
 from display_presets.logger import get_logger
@@ -193,6 +194,54 @@ def _path_monitor_identity(path: dict[str, Any]) -> dict[str, Any]:
     return {}
 
 
+def _path_target_signal(
+    path: dict[str, Any], modes: list[dict[str, Any]],
+) -> dict[str, Any] | None:
+    index = path['targetInfo']['modeInfoIdx']
+    if 0 <= index < len(modes) and modes[index].get('infoType') == 2:
+        return modes[index]['targetMode']['targetVideoSignalInfo']
+    return None
+
+
+def _path_signal_settings(
+    path: dict[str, Any], modes: list[dict[str, Any]],
+) -> tuple[int, int, int]:
+    target = path['targetInfo']
+    rate = target['refreshRate']
+    scanline = target['scanLineOrdering']
+    signal = _path_target_signal(path, modes)
+    if signal is not None:
+        rate = signal['vSyncFreq']
+        scanline = signal['scanLineOrdering']
+    return rate['Numerator'], rate['Denominator'], scanline
+
+
+def _same_refresh_rate(
+    first: tuple[int, int], second: tuple[int, int], nominal: bool = False,
+) -> bool:
+    if not first[1] or not second[1]:
+        return first == second
+    if nominal:
+        return round(first[0] / first[1]) == round(second[0] / second[1])
+    return first[0] * second[1] == second[0] * first[1]
+
+
+def _same_target_signal(first: dict[str, Any] | None, second: dict[str, Any]) -> bool:
+    if first is None:
+        return False
+    for field, value in second.items():
+        if field in ('hSyncFreq', 'vSyncFreq'):
+            actual = first[field]
+            if not _same_refresh_rate(
+                (actual['Numerator'], actual['Denominator']),
+                (value['Numerator'], value['Denominator']),
+            ):
+                return False
+        elif first.get(field) != value:
+            return False
+    return True
+
+
 class DisplayConfigManager:
     def get_current(self):
         pc, mc = c_uint32(), c_uint32()
@@ -219,8 +268,8 @@ class DisplayConfigManager:
         Phase 1 — Set the source-to-target topology via SDC_TOPOLOGY_SUPPLIED
         using fresh adapter LUIDs (avoids stale serialized data).
 
-        Phase 2 — Query the resulting fresh config from Windows, adjust source
-        positions to match the saved preset, and apply back.
+        Phase 2 — Restore the saved source modes, rotation, scaling and refresh
+        rates on the fresh configuration, then verify the resulting settings.
         """
         _INVALID = 0xFFFFFFFF
 
@@ -318,8 +367,8 @@ class DisplayConfigManager:
                 identity.get('name') or resolved.get('name') or 'display',
             )
 
-        # --- Extract desired source positions from saved config ---
-        desired = {}  # current target_id -> {x, y}
+        # --- Extract saved source modes and per-target settings ---
+        desired = {}
         for p in cfg['paths']:
             saved_tid = p['targetInfo']['id']
             tid = target_id_map.get(saved_tid, saved_tid)
@@ -328,9 +377,18 @@ class DisplayConfigManager:
                 m = cfg['modes'][si]
                 if m.get('infoType') == 1 and 'sourceMode' in m:
                     sm = m['sourceMode']
-                    desired[tid] = {'x': sm['position']['x'], 'y': sm['position']['y']}
+                    numerator, denominator, scanline = _path_signal_settings(p, cfg['modes'])
+                    desired[tid] = {
+                        'source': sm,
+                        'rotation': p['targetInfo']['rotation'],
+                        'scaling': p['targetInfo']['scaling'],
+                        'refresh': (numerator, denominator),
+                        'scanline': scanline,
+                        'signal': _path_target_signal(p, cfg['modes']),
+                        'nominal': p.get('refreshRateIsNominal', False),
+                    }
 
-        _log.debug('apply: desired positions for %d targets: %s', len(desired), desired)
+        _log.debug('apply: desired display settings for %d targets: %s', len(desired), desired)
 
         # --- Pre-flight: every saved target id must be reachable on this adapter ---
         missing = [
@@ -393,48 +451,148 @@ class DisplayConfigManager:
             _log.error('Phase 1 failed: code=%d — cannot set topology', r1)
             return r1
 
-        # --- Phase 2: Adjust source positions on fresh config ---
+        # --- Phase 2: Restore modes and target settings on fresh config ---
         if not desired:
-            _log.info('No position data in saved config; topology applied, done')
+            _log.info('No source mode data in saved config; topology applied, done')
             return 0
 
         pc2, mc2 = c_uint32(), c_uint32()
-        GetDisplayConfigBufferSizes(0x02, ctypes.byref(pc2), ctypes.byref(mc2))
+        result = GetDisplayConfigBufferSizes(0x02, ctypes.byref(pc2), ctypes.byref(mc2))
+        if result != 0:
+            _log.error('Phase 2 GetDisplayConfigBufferSizes failed: %d', result)
+            return result
         fp = (DISPLAYCONFIG_PATH_INFO * pc2.value)()
         fm = (DISPLAYCONFIG_MODE_INFO * mc2.value)()
-        QueryDisplayConfig(0x02, ctypes.byref(pc2), fp, ctypes.byref(mc2), fm, None)
+        result = QueryDisplayConfig(0x02, ctypes.byref(pc2), fp, ctypes.byref(mc2), fm, None)
+        if result != 0:
+            _log.error('Phase 2 QueryDisplayConfig failed: %d', result)
+            return result
 
         _log.debug('Phase 2: fresh config has %d paths, %d modes', pc2.value, mc2.value)
 
         changed = False
+        changed_source_modes = set()
+        seen_targets = set()
         for i in range(pc2.value):
             tid = fp[i].targetInfo.id
             if tid not in desired:
                 continue
-            d = desired[tid]
+            seen_targets.add(tid)
+            source = desired[tid]['source']
             si = fp[i].sourceInfo.modeInfoIdx
             if si == _INVALID or si >= mc2.value or fm[si].infoType != 1:
-                continue
+                raise RuntimeError(f'Windows did not restore a source mode for display {tid}')
             sm = fm[si].modeInfo.sourceMode
-            if sm.position.x != d['x'] or sm.position.y != d['y']:
+            for field in ('width', 'height', 'pixelFormat'):
+                if getattr(sm, field) != source[field]:
+                    _log.debug('  tgt %d: %s %d -> %d',
+                               tid, field, getattr(sm, field), source[field])
+                    setattr(sm, field, source[field])
+                    changed_source_modes.add(si)
+                    changed = True
+            position = source['position']
+            if sm.position.x != position['x'] or sm.position.y != position['y']:
                 _log.debug(
                     '  tgt %d: pos (%d,%d) -> (%d,%d)',
-                    tid, sm.position.x, sm.position.y, d['x'], d['y'],
+                    tid, sm.position.x, sm.position.y, position['x'], position['y'],
                 )
-                sm.position.x = d['x']
-                sm.position.y = d['y']
+                sm.position.x = position['x']
+                sm.position.y = position['y']
+                changed = True
+
+        if seen_targets != set(desired):
+            raise RuntimeError('Windows did not restore all preset displays')
+
+        # Restore each clone target independently while preserving its fresh identity.
+        additional_modes = []
+        for i in range(pc2.value):
+            target = fp[i].targetInfo
+            if target.id not in desired:
+                continue
+            d = desired[target.id]
+            current_rate = (target.refreshRate.Numerator, target.refreshRate.Denominator)
+            scanline = target.scanLineOrdering
+            ti = target.modeInfoIdx
+            current_signal = None
+            if ti != _INVALID and ti < mc2.value and fm[ti].infoType == 2:
+                signal = fm[ti].modeInfo.targetMode.targetVideoSignalInfo
+                current_rate = (signal.vSyncFreq.Numerator, signal.vSyncFreq.Denominator)
+                scanline = signal.scanLineOrdering
+                current_signal = self._dump_mode(fm[ti])['targetMode']['targetVideoSignalInfo']
+            rate_specified = d['refresh'][0] > 0 and d['refresh'][1] > 0
+            if (fp[i].sourceInfo.modeInfoIdx in changed_source_modes
+                    or target.rotation != d['rotation']
+                    or (d['scaling'] != 128 and target.scaling != d['scaling'])
+                    or (rate_specified and not _same_refresh_rate(
+                        current_rate, d['refresh'], d['nominal']))
+                    or (d['signal'] is not None
+                        and not _same_target_signal(current_signal, d['signal']))
+                    or (d['scanline'] != 0 and scanline != d['scanline'])):
+                target.rotation = d['rotation']
+                target.scaling = d['scaling']
+                target.refreshRate.Numerator, target.refreshRate.Denominator = d['refresh']
+                target.scanLineOrdering = d['scanline'] if rate_specified else 0
+                if d['signal'] is not None:
+                    if current_signal is None:
+                        mode = DISPLAYCONFIG_MODE_INFO()
+                        mode.infoType = 2
+                        mode.id = target.id
+                        mode.adapterId = target.adapterId
+                        target.modeInfoIdx = mc2.value + len(additional_modes)
+                        additional_modes.append(mode)
+                    else:
+                        mode = fm[ti]
+                    signal = mode.modeInfo.targetMode.targetVideoSignalInfo
+                    for field, value in d['signal'].items():
+                        if isinstance(value, dict):
+                            for member, number in value.items():
+                                setattr(getattr(signal, field), member, number)
+                        else:
+                            setattr(signal, field, value)
+                else:
+                    # Editor changes require a new timing selected by Windows.
+                    target.modeInfoIdx = _INVALID
                 changed = True
 
         if not changed:
-            _log.info('Positions already match saved preset; done')
+            _log.info('Display settings already match saved preset; done')
             return 0
 
-        # SDC_APPLY | SDC_USE_SUPPLIED_DISPLAY_CONFIG | SDC_ALLOW_CHANGES
-        r2 = SetDisplayConfig(pc2.value, fp, mc2.value, fm, 0x80 | 0x20 | 0x400)
-        _log.info('Phase 2 (positions): code=%d', r2)
+        # SDC_APPLY | SDC_USE_SUPPLIED_DISPLAY_CONFIG; reject unsupported modes.
+        if additional_modes:
+            fm = (DISPLAYCONFIG_MODE_INFO * (mc2.value + len(additional_modes)))(
+                *fm[:mc2.value], *additional_modes,
+            )
+            mc2.value = len(fm)
+        r2 = SetDisplayConfig(pc2.value, fp, mc2.value, fm, 0x80 | 0x20)
+        _log.info('Phase 2 (display settings): code=%d', r2)
 
         if r2 != 0:
             _log.warning('Phase 2 failed but topology was set in Phase 1')
+            return r2
+
+        actual = self.get_current()
+        verified = set()
+        for path in actual['paths']:
+            tid = path['targetInfo']['id']
+            if tid not in desired:
+                continue
+            d = desired[tid]
+            si = path['sourceInfo']['modeInfoIdx']
+            if si >= len(actual['modes']) or actual['modes'][si].get('infoType') != 1:
+                raise RuntimeError(f'Windows did not restore a source mode for display {tid}')
+            source = actual['modes'][si]['sourceMode']
+            rate = _path_signal_settings(path, actual['modes'])[:2]
+            if (source != d['source']
+                    or path['targetInfo']['rotation'] != d['rotation']
+                    or (d['signal'] is not None and not _same_target_signal(
+                        _path_target_signal(path, actual['modes']), d['signal']))
+                    or (d['refresh'][0] > 0 and d['refresh'][1] > 0
+                        and not _same_refresh_rate(rate, d['refresh'], d['nominal']))):
+                raise RuntimeError(f'Windows did not restore the saved settings for display {tid}')
+            verified.add(tid)
+        if verified != set(desired):
+            raise RuntimeError('Windows did not restore all preset displays')
 
         return 0
 
@@ -613,6 +771,31 @@ class DisplayConfigManager:
 
         if not idx_to_mon:
             return cfg
+
+        for idx, monitor in idx_to_mon.items():
+            path = paths[idx]
+            target = path['targetInfo']
+            numerator, denominator, scanline = _path_signal_settings(path, modes)
+            rotation = monitor.get('rotation', (target['rotation'] - 1) * 90) // 90 + 1
+            timing_changed = rotation != target['rotation']
+            si = path['sourceInfo']['modeInfoIdx']
+            if si != _INVALID and si < len(modes) and modes[si].get('infoType') == 1:
+                source = modes[si]['sourceMode']
+                timing_changed |= (source['width'], source['height']) != (
+                    int(monitor['width']), int(monitor['height']),
+                )
+            if ('refreshRate' in monitor
+                    and (timing_changed or not denominator
+                         or monitor['refreshRate'] != round(numerator / denominator))):
+                rate = Fraction(str(monitor['refreshRate']))
+                numerator, denominator = rate.numerator, rate.denominator
+                path['refreshRateIsNominal'] = denominator == 1
+                timing_changed = True
+            target['rotation'] = rotation
+            target['refreshRate'] = {'Numerator': numerator, 'Denominator': denominator}
+            target['scanLineOrdering'] = scanline
+            if timing_changed:
+                target['modeInfoIdx'] = _INVALID
 
         # Group path indices by the new position key (clone groups share a position)
         pos_to_paths = {}
